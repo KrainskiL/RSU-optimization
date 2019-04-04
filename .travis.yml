@@ -7,17 +7,11 @@ os:
 julia:
   - 1.0
 
-
 notifications:
   email: false
 
-#script: # the default script is equivalent to the following
-#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-#  - julia -e 'Pkg.clone(pwd()); Pkg.build("OpenStreetMapXDES"); Pkg.test("OpenStreetMapXDES"; coverage=true)';
-
 after_success:
   - julia -e 'using Pkg; cd(Pkg.dir("RSUOptimization")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())';
-#  - julia -e 'if VERSION >= v"0.7.0-" using Pkg end; cd(Pkg.dir("OpenStreetMapXDES")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())';
 
 jobs:
   include:
