@@ -1,6 +1,6 @@
 name = "RSUOptimization"
-uuid = "ac291d70-56f6-11e9-3150-615059e453b0"
-authors = ["Lukasz Krainski"]
+uuid = "700cc030-571e-11e9-19c5-f738a776ab3c"
+authors = ["lukasz.krainski "]
 version = "0.1.0"
 
 [deps]
