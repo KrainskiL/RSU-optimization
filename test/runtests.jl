@@ -1,6 +1,5 @@
 using Test
 using OpenStreetMapX
-import LightGraphs
 
 @testset "maps" begin
 
