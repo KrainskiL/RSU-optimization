@@ -2,10 +2,9 @@ Reference
 =========
 
 ```@meta
-CurrentModule = OpenStreetMapXDES
+CurrentModule = RSUOptimization
 DocTestSetup = quote
     using OpenStreetMapX
-	using OpenStreetMapXDES
 end
 ```
 

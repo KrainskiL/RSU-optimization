@@ -1,5 +1,6 @@
 using Test
 using OpenStreetMapX
+using Random
 
 @testset "maps" begin
 
