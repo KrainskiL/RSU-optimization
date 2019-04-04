@@ -1,0 +1,7 @@
+name = "RSUOptimization"
+uuid = "ac291d70-56f6-11e9-3150-615059e453b0"
+authors = ["LUkasz Krainski"]
+version = "0.1.0"
+
+[deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
