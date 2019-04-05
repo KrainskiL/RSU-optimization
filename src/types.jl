@@ -7,13 +7,13 @@ Fields indicators:
 [V]ariable
 """
 """
-'Agent' type stores information about agents
+`Agent` type stores information about agents
 
 **Fields**
-[C] 'ID' : unique identificator
-[C] 'start_node' : starting point of agent's route
-[C] 'end_node' : ending point of agent's route
-[V] 'route' : array of nodes determining agent's route (may be changed by re-routing)
+* [C] `ID` : unique identificator
+* [C] `start_node` : starting point of agent's route
+* [C] `end_node` : ending point of agent's route
+* [V] `route` : array of nodes determining agent's route (may be changed by re-routing)
 """
 
 mutable struct Agent
@@ -24,11 +24,11 @@ mutable struct Agent
 end
 
 """
-'RSU' type stores information about Road Side Units - V2I infrastructure
+`RSU` type stores information about Road Side Units - V2I infrastructure
 
 **Fields**
-[C] 'ID' : unique identificator
-[C] 'Location' : node in which RSU is located
+* [C] `ID` : unique identificator
+* [C] `Location` : node in which RSU is located
 """
 
 struct RSU
