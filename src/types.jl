@@ -14,13 +14,17 @@ Fields indicators:
 * [C] `start_node` : starting point of agent's route
 * [C] `end_node` : ending point of agent's route
 * [V] `route` : array of nodes determining agent's route (may be changed by re-routing)
+* [V] `travel_time` : time spend in simulation
+* [V] `pos` : tuple with current edge id and position on the edge
 """
 
 mutable struct Agent
     ID::Int64
     start_node::Int64
     end_node::Int64
-    route::Union{Vector{Int64}, Nothing}
+    route::Union{Array{Int64,1}, Nothing}
+    travel_time::Float64
+    pos::Tuple{Tuple{Int64,Int64},Float64}
 end
 
 """

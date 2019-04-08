@@ -24,9 +24,9 @@ function pick_random_node(map::MapData, rects::Vector{Rect})
         p2 = ENU(LLA(frect[3], frect[4]), map_data.bounds)
         exE = extrema([p1.east, p2.east])
         exN = extrema([p1.north, p2.north])
-        for (key, value) in map_data.nodes
-            if (exE[1] <= value.east <= exE[2] &&
-                exN[1] <= value.north <= exN[2])
+        for key in keys(map_data.v)
+            if (exE[1] <= map_data.nodes[key].east <= exE[2] &&
+                exN[1] <= map_data.nodes[key].north <= exN[2])
                 push!(nodes_in_rects, key)
             end
         end
@@ -34,6 +34,12 @@ function pick_random_node(map::MapData, rects::Vector{Rect})
     chosen_node = rand(unique!(nodes_in_rects))
     return chosen_node
 end
-v
+
+function pick_random_node(map::MapData, rects::Rect)
+    pick_random_node(map, [rects])
+end
 
 @time pick_random_node(map_data, [((41.0,-119.70),(39.0,-119.74)),((38.8,-119.60),(39.0,-119.65))])
+@time pick_random_node(map_data, ((41.0,-119.70),(39.0,-119.74)))
+
+Agent(1, 580387828, 140463922)
