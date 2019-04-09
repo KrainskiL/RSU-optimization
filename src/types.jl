@@ -15,7 +15,8 @@ Fields indicators:
 * [C] `end_node` : ending point of agent's route
 * [V] `route` : array of nodes determining agent's route (may be changed by re-routing)
 * [V] `travel_time` : time spend in simulation
-* [V] `pos` : tuple with current edge id and position on the edge
+* [V] `edge` : dictionary with current edge agent represented by vertices and nodes
+* [V] `pos` : position on current edge
 """
 
 mutable struct Agent
@@ -24,7 +25,8 @@ mutable struct Agent
     end_node::Int64
     route::Union{Array{Int64,1}, Nothing}
     travel_time::Float64
-    pos::Tuple{Tuple{Int64,Int64},Float64}
+    edge::Dict{String,Int}
+    pos::Float64
 end
 
 """

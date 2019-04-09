@@ -2,26 +2,62 @@
 ## Discrete events traffic model ##
 ###################################
 
-function simulation(Agents::Vector{Agent}, map::MapData)
+function simulation(InAgents::Vector{Agent}, map::MapData)
+    Agents = deepcopy(InAgents)
+    AgentsFin = Vector{Agent}()
     #Initital velocities on edges
-    densities = countmap([[map.v[x.route[1]],map.v[x.route[2]]] for x in Agents])
+    densities = countmap([[a.edge["start_v"],a.edge["end_v"]] for a in Agents])
     max_densities = get_max_densities(map, 5.0)
     max_speeds = OpenStreetMapX.get_velocities(map)
     speeds = deepcopy(max_speeds)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
     simtime = 0
+    counter = 0
+    while length(Agents) != 0
+        counter += 1
+        times_to_event = Dict([ (a.ID,
+                            (map.w[a.edge["start_v"], a.edge["end_v"]] - a.pos)/
+                            speeds[a.edge["start_v"], a.edge["end_v"]]) for a in Agents])
 
-    times_to_event = map(Agents) do x
-        edge_start, edge_end = [map.v[agent.pos[1][1]], map.v[agent.pos[1][2]]]
-        time_to_event = (map.w[edge_start, edge_end] - agent.pos[2])/speeds[edge_start, edge_end]
-        return Dict(time_to_event => x.ID)
+        next_event, vID = findmin(times_to_event)
+        #Debug
+        vAgent = Agents[getfield.(Agents,:ID).== Int(vID)][1]
+        #take agent from previous edge
+        pedgekey = [vAgent.edge["start_v"], vAgent.edge["end_v"]]
+        densities[pedgekey] -= 1
+        #change agent's route and current edge or remove if destination reached
+        if length(vAgent.route[2:end]) == 1
+            #remove agent
+            push!(AgentsFin, vAgent)
+            Agents = Agents[.!(getfield.(Agents,:ID).== vID)]
+            update_weights!(speeds, Dict(pedgekey => densities[pedgekey]),
+                                        max_densities, max_speeds)
+        else
+            vAgent.route = vAgent.route[2:end]
+            currEdge = Dict("start_v"=> map.v[vAgent.route[1]],
+                            "end_v"=> map.v[vAgent.route[2]],
+                            "start_n"=> vAgent.route[1],
+                            "end_n"=> vAgent.route[2])
+            vAgent.edge = currEdge
+            vAgent.pos = 0.0
+            vAgent.travel_time += next_event
+            #add density on new edge
+            cedgekey = [vAgent.edge["start_v"], vAgent.edge["end_v"]]
+            haskey(densities,cedgekey) ? densities[cedgekey] += 1 : densities[cedgekey] = 1
+            update_weights!(speeds, Dict(cedgekey => densities[cedgekey],
+                                        pedgekey => densities[pedgekey]),
+                                        max_densities, max_speeds)
+        end
+
+        #update agents position
+        for a in Agents[.!(getfield.(Agents,:ID).== vID)]
+            a.pos = a.pos + next_event*speeds[a.edge["start_v"], a.edge["end_v"]]
+            a.travel_time += next_event
+        end
+        simtime += next_event
     end
-    next_event = minimum(times_to_event)
-    #Debug
-    println(next_event)
-
-    return speeds
+    return AgentsFin, counter, simtime
 end
 
 function get_max_densities(map::MapData, density_factor::Float64)
@@ -44,15 +80,3 @@ function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64}, rho::Dict
         speed_matrix[k[1],k[2]]  = (V_max[k[1],k[2]] - V_min)* max((1 - v/rho_max[k[1],k[2]]), 0.0) + V_min
     end
 end
-
-
-
-times_to_event = map(AgentsArr) do x
-    edge_start, edge_end = [map_data.v[x.pos[1][1]], map_data.v[x.pos[1][2]]]
-    time_to_event = (map_data.w[edge_start, edge_end] - x.pos[2])/speeds[edge_start, edge_end]
-    return (x.ID,time_to_event)
-end
-times_to_event = Dict(times_to_event)
-focusID = findmin(times_to_event)[2]
-densities = countmap([[map_data.v[x.route[1]],map_data.v[x.route[2]]] for x in AgentsArr])
-haskey(densities,[,1966])

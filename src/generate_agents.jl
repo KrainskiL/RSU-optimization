@@ -38,8 +38,3 @@ end
 function pick_random_node(map::MapData, rects::Rect)
     pick_random_node(map, [rects])
 end
-
-@time pick_random_node(map_data, [((41.0,-119.70),(39.0,-119.74)),((38.8,-119.60),(39.0,-119.65))])
-@time pick_random_node(map_data, ((41.0,-119.70),(39.0,-119.74)))
-
-Agent(1, 580387828, 140463922)
