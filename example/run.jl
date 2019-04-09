@@ -1,4 +1,5 @@
 using OpenStreetMapX
+using StatsBase
 
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";

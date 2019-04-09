@@ -11,10 +11,16 @@ function simulation(Agents::Vector{Agent}, map::MapData)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
     simtime = 0
-        for agent in Agents
-            edge_start, edge_end = collect(map.v[agent.pos[1]])
-                next_event = min([map.w[x.pos[1],x.pos[2]]/speeds[x.pos[1],x.pos[2]] for x in Agents])
-        end
+
+    times_to_event = map(Agents) do x
+        edge_start, edge_end = [map.v[agent.pos[1][1]], map.v[agent.pos[1][2]]]
+        time_to_event = (map.w[edge_start, edge_end] - agent.pos[2])/speeds[edge_start, edge_end]
+        return Dict(time_to_event => x.ID)
+    end
+    next_event = minimum(times_to_event)
+    #Debug
+    println(next_event)
+
     return speeds
 end
 
@@ -38,3 +44,15 @@ function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64}, rho::Dict
         speed_matrix[k[1],k[2]]  = (V_max[k[1],k[2]] - V_min)* max((1 - v/rho_max[k[1],k[2]]), 0.0) + V_min
     end
 end
+
+
+
+times_to_event = map(AgentsArr) do x
+    edge_start, edge_end = [map_data.v[x.pos[1][1]], map_data.v[x.pos[1][2]]]
+    time_to_event = (map_data.w[edge_start, edge_end] - x.pos[2])/speeds[edge_start, edge_end]
+    return (x.ID,time_to_event)
+end
+times_to_event = Dict(times_to_event)
+focusID = findmin(times_to_event)[2]
+densities = countmap([[map_data.v[x.route[1]],map_data.v[x.route[2]]] for x in AgentsArr])
+haskey(densities,[,1966])
