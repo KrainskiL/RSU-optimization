@@ -1,5 +1,6 @@
 module RSUOptimization
 
-greet() = print("Hello World!")
+using OpenStreetMapX
 
-end # module
+
+end

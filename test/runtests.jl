@@ -3,6 +3,7 @@ using OpenStreetMapX
 using Random
 
 @testset "maps" begin
+print(pwd())
 
 using Random
 Random.seed!(0);
