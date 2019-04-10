@@ -2,9 +2,9 @@
 ## Discrete events traffic model ##
 ###################################
 
-function simulation(InAgents::Vector{Agent}, map::MapData)
-    Agents = deepcopy(InAgents)
-    AgentsFin = Vector{Agent}()
+function simulation(N::Int, map::MapData)
+    Agents, inititaltime = generate_agents(N)
+    traffictime = Dict{Int,Float64}()
     #Initital velocities on edges
     densities = countmap([[a.edge["start_v"],a.edge["end_v"]] for a in Agents])
     max_densities = get_max_densities(map, 5.0)
@@ -29,16 +29,14 @@ function simulation(InAgents::Vector{Agent}, map::MapData)
         #change agent's route and current edge or remove if destination reached
         if length(vAgent.route[2:end]) == 1
             #remove agent
-            push!(AgentsFin, vAgent)
+            traffictime[vAgent.ID]=vAgent.travel_time
             Agents = Agents[.!(getfield.(Agents,:ID).== vID)]
             update_weights!(speeds, Dict(pedgekey => densities[pedgekey]),
                                         max_densities, max_speeds)
         else
             vAgent.route = vAgent.route[2:end]
             currEdge = Dict("start_v"=> map.v[vAgent.route[1]],
-                            "end_v"=> map.v[vAgent.route[2]],
-                            "start_n"=> vAgent.route[1],
-                            "end_n"=> vAgent.route[2])
+                            "end_v"=> map.v[vAgent.route[2]])
             vAgent.edge = currEdge
             vAgent.pos = 0.0
             vAgent.travel_time += next_event
@@ -57,7 +55,9 @@ function simulation(InAgents::Vector{Agent}, map::MapData)
         end
         simtime += next_event
     end
-    return AgentsFin, counter, simtime
+    #Percentage difference in initial and real travel time
+    timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
+    return counter, simtime, timediff
 end
 
 function get_max_densities(map::MapData, density_factor::Float64)

@@ -38,3 +38,40 @@ end
 function pick_random_node(map::MapData, rects::Rect)
     pick_random_node(map, [rects])
 end
+
+"""
+`generate_agents` function creating vector of agents and returning travel time
+for initial routes travelled with maximal speed
+
+**Input parameters**
+* `N` : number of agents to be generated
+
+"""
+function generate_agents(N::Int)
+    AgentsArr = Vector{Agent}()
+    times = Dict{Int,Float64}()
+    #Generating N agents
+    for i in 1:N
+        dist = Inf
+        start_node = 0
+        end_node = 0
+        counter = 0
+        init_route = Array{Int64,1}()
+        time = 0
+        while dist == Inf
+            start_node = pick_random_node(map_data, ((39.50,-119.70),(39.55,-119.74)))
+            end_node = pick_random_node(map_data, ((39.50,-119.80),(39.55,-119.76)))
+            init_route, dist, time = fastest_route(map_data, start_node, end_node)
+            counter +=1
+            if counter == 100
+                error("Route from starting to ending point can't be calculated.")
+            end
+        end
+        times[i] = time
+        firstEdge = Dict("start_v"=> map_data.v[init_route[1]],
+                        "end_v"=> map_data.v[init_route[2]])
+        NewAgent = Agent(i,  start_node, end_node, init_route, 0.0, firstEdge, 0.0)
+        push!(AgentsArr, NewAgent)
+    end
+    return AgentsArr, times
+end
