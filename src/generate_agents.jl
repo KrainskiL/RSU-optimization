@@ -14,23 +14,20 @@ Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
 
 function pick_random_node(map::MapData, rects::Vector{Rect})
-#Check bottom left and top right points compliance
-    [if (rect[1][1] == rect[2][1] || rect[1][2] == rect[2][2])
-    throw(DomainError(rect, "coordinates not defining a rectangle")) end for rect in rects]
     nodes_in_rects = Vector{Int}()
-
     for rect in rects
         frect = collect(Iterators.flatten(rect))
         p1 = ENU(LLA(frect[1], frect[2]), map.bounds)
         p2 = ENU(LLA(frect[3], frect[4]), map.bounds)
         exE = extrema([p1.east, p2.east])
         exN = extrema([p1.north, p2.north])
-        for key in keys(map.v)
-            if (exE[1] <= map.nodes[key].east <= exE[2] &&
-                exN[1] <= map.nodes[key].north <= exN[2])
-                push!(nodes_in_rects, key)
+        v_keys = collect(keys(map.v))
+        rect_nodes = map(v_keys) do key
+            if exE[1] <= map.nodes[key].east <= exE[2] && exN[1] <= map.nodes[key].north <= exN[2]
+                return key
             end
         end
+        push!(nodes_in_rects, rect_nodes)
     end
     chosen_node = rand(unique!(nodes_in_rects))
     return chosen_node

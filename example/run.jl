@@ -1,5 +1,6 @@
 using OpenStreetMapX
 using RSUOptimization
+using BenchmarkTools
 
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
@@ -9,7 +10,8 @@ Start = ((39.50,-119.70),(39.55,-119.74))
 End = ((39.50,-119.80),(39.55,-119.76))
 
 @time output = simulation(1000, [Start], [End], map_data)
-
+@time generate_agents(1000, [Start], [End], map_data)
+@benchmark pick_random_node(map_data, [Start])
 """
 Ns = [10, 100, 500, 1000, 2000]
 ResultsVec = Vector()
