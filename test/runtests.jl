@@ -29,12 +29,12 @@ max_dens = get_max_densities(test_map, 5.0)
 max_speeds = OpenStreetMapX.get_velocities(test_map)
 speeds = deepcopy(max_speeds)
 
-@test sum(max_dens) == 206315.88713471388
+@test round(sum(max_dens);digits=3) == 206316.887
 
 update_weights!(speeds, Dict((2,1)=>15,(3,4)=>60), max_dens, max_speeds)
 
 @test speeds[2,1] < max_speeds[2,1] && speeds[3,4] < max_speeds[3,4] && speeds[487,1] == max_speeds[487,1]
-@test speeds[2,1] == 5.12499971730625 && max_speeds[2,1] == 11.11111111111111
+@test round(speeds[2,1];digits=3) == 5.125 && round(max_speeds[2,1];digits=3) == 11.111
 end
 
 @testset "simulation" begin
