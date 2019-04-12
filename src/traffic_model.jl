@@ -2,8 +2,8 @@
 ## Discrete events traffic model ##
 ###################################
 
-function simulation(N::Int, map::MapData)
-    Agents, inititaltime = generate_agents(N)
+function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
+    Agents, inititaltime = generate_agents(N, StartArea, EndArea, map)
     traffictime = Dict{Int,Float64}()
     #Initital velocities on edges
     densities = countmap([[a.edge["start_v"],a.edge["end_v"]] for a in Agents])
@@ -70,7 +70,8 @@ function get_max_densities(map::MapData, density_factor::Float64)
     segments = [[map.v[s.node0], map.v[s.node1], roads_lanes[s.parent]] for s in segments]
     sparse_lanes = SparseArrays.sparse([x[1] for x in segments],
                                         [x[2] for x in segments],
-                                        [x[3] for x in segments])
+                                        [x[3] for x in segments],
+                                        length(map.v),length(map.v))
     return map.w .* sparse_lanes / density_factor
 end
 

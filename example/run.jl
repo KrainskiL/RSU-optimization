@@ -1,11 +1,16 @@
 using OpenStreetMapX
-using StatsBase
-using SparseArrays
+using RSUOptimization
 
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
-map_data = get_map_data(datapath, mapfile,use_cache=false);
+map_data = get_map_data(datapath, mapfile,use_cache=false; road_levels= Set(1:4));
 
+Start = ((39.50,-119.70),(39.55,-119.74))
+End = ((39.50,-119.80),(39.55,-119.76))
+
+@time output = simulation(1000, [Start], [End], map_data)
+
+"""
 Ns = [10, 100, 500, 1000, 2000]
 ResultsVec = Vector()
 for element in Ns
@@ -19,8 +24,4 @@ print(mean_and_std.([ResultsVec[i][3] for i in 1:length(ResultsVec)]))
 for i in 1:length(ResultsVec)
     print(quantile(ResultsVec[i][3] ,[0.0, 0.25, 0.5, 0.75, 1.0]))
 end
-
-using Plots
-histogram(collect(values(timediff)))
-mean_and_std(collect(values(timediff)))
-quantile(collect(values(timediff)))
+"""

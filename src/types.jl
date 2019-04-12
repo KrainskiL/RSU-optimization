@@ -2,21 +2,16 @@
 ## Types used in simulation ##
 ################################
 """
-Fields indicators:
-[C]onstant
-[V]ariable
-"""
-"""
 `Agent` type stores information about agents
 
 **Fields**
-* [C] `ID` : unique identificator
-* [C] `start_node` : starting point of agent's route
-* [C] `end_node` : ending point of agent's route
-* [V] `route` : array of nodes determining agent's route (may be changed by re-routing)
-* [V] `travel_time` : time spend in simulation
-* [V] `edge` : dictionary with current edge agent represented by vertices and nodes
-* [V] `pos` : position on current edge
+* `ID` : unique identificator
+* `start_node` : starting point of agent's route
+* `end_node` : ending point of agent's route
+* `route` : array of nodes determining agent's route (may be changed by re-routing)
+* `travel_time` : time spend in simulation
+* `edge` : dictionary with current edge agent represented by vertices and nodes
+* `pos` : position on current edge
 """
 
 mutable struct Agent
