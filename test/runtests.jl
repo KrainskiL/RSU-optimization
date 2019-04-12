@@ -1,5 +1,6 @@
 using Test
 using OpenStreetMapX
+using RSUOptimization
 using Random
 
 println(pwd())
