@@ -2,8 +2,8 @@
 ## Discrete events traffic model ##
 ###################################
 
-function simulation(N::Int, map::MapData)
-    Agents, inititaltime = generate_agents(N)
+function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
+    Agents, inititaltime = generate_agents(N, StartArea, EndArea, map)
     traffictime = Dict{Int,Float64}()
     #Initital velocities on edges
     densities = countmap([[a.edge["start_v"],a.edge["end_v"]] for a in Agents])
