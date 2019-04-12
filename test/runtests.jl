@@ -14,16 +14,13 @@ Rect2 = ((39.50,-119.80),(39.55,-119.76))
 Random.seed!(0);
 @test rand(Int) == -4635026124992869592
 
-Random.seed!(0);
-@test pick_random_node(test_map, [Rect1]) == 580387849
+@test in(pick_random_node(test_map, [Rect1]), keys(test_map.nodes))
 
-Random.seed!(0);
-@test pick_random_node(test_map, [Rect1, Rect2]) == 580387570
+@test in(pick_random_node(test_map, [Rect1, Rect2]), keys(test_map.nodes))
 
-Random.seed!(0);
 AgentsSet, AgentsTime = generate_agents(10, [Rect1], [Rect2], test_map)
-@test AgentsSet[5].start_node == 140311966
-@test AgentsTime[5] == 255.72200861225798
+@test all([in(x, keys(test_map.nodes)) for x in getfield.(AgentsSet,:start_node)])
+@test AgentsTime[5] == OpenStreetMapX.fastest_route(test_map, AgentsSet[5].start_node, AgentsSet[5].end_node)[3]
 
 end
 
@@ -41,11 +38,10 @@ update_weights!(speeds, Dict((2,1)=>15,(3,4)=>60), max_dens, max_speeds)
 end
 
 @testset "simulation" begin
-Random.seed!(0);
 iterations, totaltime, timediff = simulation(10, [Rect1], [Rect2], test_map)
 
-@test iterations == 466
-@test totaltime == 504.76176645787575
-@test sum(timediff) == 20.520435962368882
+@test typeof(iterations) == Int64
+@test typeof(totaltime) == Float64
+@test typeof(timediff) == Vector{Float64}
 
 end
