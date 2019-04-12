@@ -6,7 +6,7 @@ using StatsBase
 using SparseArrays
 
 #types
-export Agent
+export Agent, Rect
 
 #functions
 export generate_agents, pick_random_node
