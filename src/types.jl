@@ -36,9 +36,3 @@ struct RSU
     ID::Int64
     Location::Int64
 end
-
-"""
-`Rect` type is used to pass rectangle-shape areas to generate_agents function
-"""
-
-Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}

@@ -11,6 +11,8 @@ Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 * `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas;
 
 """
+Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
+
 function pick_random_node(map::MapData, rects::Vector{Rect})
 #Check bottom left and top right points compliance
     [if (rect[1][1] == rect[2][1] || rect[1][2] == rect[2][2])
