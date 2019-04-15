@@ -4,60 +4,66 @@
 
 function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
     Agents, inititaltime = generate_agents(N, StartArea, EndArea, map)
-    traffictime = Dict{Int,Float64}()
+    active = ones(Int,1,N)
+    traffictime = zeros(N)
     #Initital velocities on edges
-    densities = countmap([[a.edge["start_v"],a.edge["end_v"]] for a in Agents])
+    densities = countmap([a.edge for a in Agents])
     max_densities = get_max_densities(map, 5.0)
     max_speeds = OpenStreetMapX.get_velocities(map)
     speeds = deepcopy(max_speeds)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
-    simtime = 0
+    simtime = Dict{Int, Float64}()
     counter = 0
-    while length(Agents) != 0
+    while sum(active) != 0
         counter += 1
-        times_to_event = Dict([ (a.ID,
-                            (map.w[a.edge["start_v"], a.edge["end_v"]] - a.pos)/
-                            speeds[a.edge["start_v"], a.edge["end_v"]]) for a in Agents])
-
-        next_event, vID = findmin(times_to_event)
-        #Debug
-        vAgent = Agents[getfield.(Agents,:ID).== Int(vID)][1]
+        #Calculate next event time
+        for i = 1:N
+            if active[i] == 1
+                A = Agents[i]
+                simtime[i] = (map.w[A.edge[1], A.edge[2]] - A.pos)/
+                speeds[A.edge[1], A.edge[2]]
+            end
+        end
+        next_event, ID = findmin(simtime)
+        vAgent = Agents[ID]
         #take agent from previous edge
-        pedgekey = [vAgent.edge["start_v"], vAgent.edge["end_v"]]
-        densities[pedgekey] -= 1
+        p_edge = vAgent.edge
+        densities[p_edge] -= 1
         #change agent's route and current edge or remove if destination reached
         if length(vAgent.route[2:end]) == 1
-            #remove agent
-            traffictime[vAgent.ID]=vAgent.travel_time
-            Agents = Agents[.!(getfield.(Agents,:ID).== vID)]
-            update_weights!(speeds, Dict(pedgekey => densities[pedgekey]),
+            #disable agent
+            traffictime[ID] = vAgent.travel_time + next_event
+            vAgent.pos = 0.0
+            active[ID] = 0
+            simtime[ID] = Inf
+            println("Active agents $(sum(active))")
+            update_weights!(speeds, Dict(p_edge => densities[p_edge]),
                                         max_densities, max_speeds)
         else
             vAgent.route = vAgent.route[2:end]
-            currEdge = Dict("start_v"=> map.v[vAgent.route[1]],
-                            "end_v"=> map.v[vAgent.route[2]])
-            vAgent.edge = currEdge
+            c_edge = [map.v[vAgent.route[1]], map.v[vAgent.route[2]]]
+            vAgent.edge = c_edge
             vAgent.pos = 0.0
             vAgent.travel_time += next_event
             #add density on new edge
-            cedgekey = [vAgent.edge["start_v"], vAgent.edge["end_v"]]
-            haskey(densities,cedgekey) ? densities[cedgekey] += 1 : densities[cedgekey] = 1
-            update_weights!(speeds, Dict(cedgekey => densities[cedgekey],
-                                        pedgekey => densities[pedgekey]),
+            haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
+            update_weights!(speeds, Dict(c_edge => densities[c_edge],
+                                        p_edge => densities[p_edge]),
                                         max_densities, max_speeds)
         end
-
-        #update agents position
-        for a in Agents[.!(getfield.(Agents,:ID).== vID)]
-            a.pos = a.pos + next_event*speeds[a.edge["start_v"], a.edge["end_v"]]
-            a.travel_time += next_event
+        #update other agents position
+        for i = 1:N
+            if active[i] == 1 && i != ID
+                a = Agents[i]
+                a.pos = a.pos + next_event*speeds[a.edge[1],a.edge[2]]
+                a.travel_time += next_event
+            end
         end
-        simtime += next_event
     end
     #Percentage difference in initial and real travel time
     timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
-    return counter, simtime, timediff
+    return counter, maximum(traffictime), timediff
 end
 
 function get_max_densities(map::MapData, density_factor::Float64)

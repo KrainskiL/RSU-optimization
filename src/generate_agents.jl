@@ -12,7 +12,6 @@ Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 
 """
 Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
-
 function pick_random_node(map::MapData, rects::Vector{Rect})
     nodes_in_rects = Vector{Int}()
     for rect in rects
@@ -21,13 +20,12 @@ function pick_random_node(map::MapData, rects::Vector{Rect})
         p2 = ENU(LLA(frect[3], frect[4]), map.bounds)
         exE = extrema([p1.east, p2.east])
         exN = extrema([p1.north, p2.north])
-        v_keys = collect(keys(map.v))
-        rect_nodes = map(v_keys) do key
-            if exE[1] <= map.nodes[key].east <= exE[2] && exN[1] <= map.nodes[key].north <= exN[2]
-                return key
+        for key in keys(map.v)
+            if (exE[1] <= map.nodes[key].east <= exE[2] &&
+                exN[1] <= map.nodes[key].north <= exN[2])
+                push!(nodes_in_rects, key)
             end
         end
-        push!(nodes_in_rects, rect_nodes)
     end
     chosen_node = rand(unique!(nodes_in_rects))
     return chosen_node
@@ -47,11 +45,8 @@ function generate_agents(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect},
     #Generating N agents
     for i in 1:N
         dist = Inf
-        start_node = 0
-        end_node = 0
-        counter = 0
+        start_node = end_node = counter = time =  0
         init_route = Array{Int64,1}()
-        time = 0
         while dist == Inf
             start_node = pick_random_node(map, StartArea)
             end_node = pick_random_node(map, EndArea)
@@ -62,9 +57,8 @@ function generate_agents(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect},
             end
         end
         times[i] = time
-        firstEdge = Dict("start_v"=> map.v[init_route[1]],
-                        "end_v"=> map.v[init_route[2]])
-        NewAgent = Agent(i,  start_node, end_node, init_route, 0.0, firstEdge, 0.0)
+        firstEdge = [map.v[init_route[1]], map.v[init_route[2]]]
+        NewAgent = Agent(start_node, end_node, init_route, 0.0, firstEdge, 0.0)
         push!(AgentsArr, NewAgent)
     end
     return AgentsArr, times
