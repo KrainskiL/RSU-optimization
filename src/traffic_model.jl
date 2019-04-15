@@ -8,6 +8,9 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
     traffictime = zeros(N)
     #Initital velocities on edges
     densities = countmap([a.edge for a in Agents])
+    ##RSU Optimization module
+    stats_densities = deepcopy(densities)
+    ##
     max_densities = get_max_densities(map, 5.0)
     max_speeds = OpenStreetMapX.get_velocities(map)
     speeds = deepcopy(max_speeds)
@@ -48,6 +51,11 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
             vAgent.travel_time += next_event
             #add density on new edge
             haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
+            ##RSU Optimization module
+            if !haskey(stats_densities, c_edge) || densities[c_edge] > stats_densities[c_edge]
+                stats_densities[c_edge] = densities[c_edge]
+            end
+            ##
             update_weights!(speeds, Dict(c_edge => densities[c_edge],
                                         p_edge => densities[p_edge]),
                                         max_densities, max_speeds)
@@ -63,8 +71,28 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
     end
     #Percentage difference in initial and real travel time
     timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
-    return counter, maximum(traffictime), timediff
+
+    #Znajdz node z najwiekszym zagregowanych ruchem
+    #Sprawdz ile jest ruchu w zasiegu z tego punktu wstaw ceil(N/limit) RSU
+    #Usun obsluzony ruch z nodow
+    #POWTORZ AZ sum(values(traffic_dict)) == 0
+
+    ##RSU Optimization module
+    function optimize_RSU_location(map::MapData, stats::Dict{Array{Int64,1},Int64},
+        range::Float64, throughput::UInt64, α::Float64, ϵ::Float64)
+        RSUs = Dict{Int64,Int64}()
+    #Gather traffic in nodes
+    nodes_traffic = Dict{Int,Int}()
+    for (key,val) in stats
+        map(x-> haskey(nodes_traffic,x) ? nodes_traffic[x]+=val : nodes_traffic[x]=val, key)
+    end
+    #Place new RSUs in node with highest traffic
+    traffic, node = findmax(nodes_traffic)
+    RSUs[node] = ceil(traffic/range)
+    end
+    return counter, maximum(traffictime), timediff, stats_densities
 end
+
 
 function get_max_densities(map::MapData, density_factor::Float64)
     roads_lanes = Dict{Int64,Int64}()
