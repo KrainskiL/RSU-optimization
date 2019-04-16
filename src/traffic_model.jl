@@ -4,6 +4,7 @@
 
 function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
     Agents, inititaltime = generate_agents(N, StartArea, EndArea, map)
+    AgentsCopy = deepcopy(Agents)
     active = ones(Int,1,N)
     traffictime = zeros(N)
     #Initital velocities on edges
@@ -71,8 +72,7 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
     end
     #Percentage difference in initial and real travel time
     timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
-
-    return counter, maximum(traffictime), timediff, stats_densities
+    return counter, maximum(traffictime), timediff, stats_densities, AgentsCopy
 end
 
 
@@ -96,4 +96,79 @@ function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64}, rho::Dict
     for (k,v) in rho
         speed_matrix[k[1],k[2]]  = (V_max[k[1],k[2]] - V_min)* max((1 - v/rho_max[k[1],k[2]]), 0.0) + V_min
     end
+end
+
+
+function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Array{Int64,1},Int64},
+    range::Float64, throughput::Int64, α::Float64, ϵ::Float64, update_period::Int64)
+    #Find optimal RSUs location
+    RSU_Dict = optimize_RSU_location(map_data, stats, range, throughput, α, ϵ)
+    active = ones(Int,1,N)
+    traffictime = zeros(N)
+    #Initital velocities on edges
+    densities = countmap([a.edge for a in Agents])
+    ##RSU Optimization module
+    stats_densities = deepcopy(densities)
+    ##
+    max_densities = get_max_densities(map_data, 5.0)
+    max_speeds = OpenStreetMapX.get_velocities(map_data)
+    speeds = deepcopy(max_speeds)
+    update_weights!(speeds, densities, max_densities, max_speeds)
+    #Starting simulation
+    simtime = Dict{Int, Float64}()
+    counter = 0
+    while sum(active) != 0
+        counter += 1
+        #Calculate next event time
+        for i = 1:N
+            if active[i] == 1
+                A = Agents[i]
+                simtime[i] = (map.w[A.edge[1], A.edge[2]] - A.pos)/
+                speeds[A.edge[1], A.edge[2]]
+            end
+        end
+        next_event, ID = findmin(simtime)
+        vAgent = Agents[ID]
+        #take agent from previous edge
+        p_edge = vAgent.edge
+        densities[p_edge] -= 1
+        #change agent's route and current edge or remove if destination reached
+        if length(vAgent.route[2:end]) == 1
+            #disable agent
+            traffictime[ID] = vAgent.travel_time + next_event
+            vAgent.pos = 0.0
+            active[ID] = 0
+            simtime[ID] = Inf
+            println("Active agents $(sum(active))")
+            update_weights!(speeds, Dict(p_edge => densities[p_edge]),
+                                        max_densities, max_speeds)
+        else
+            vAgent.route = vAgent.route[2:end]
+            c_edge = [map.v[vAgent.route[1]], map.v[vAgent.route[2]]]
+            vAgent.edge = c_edge
+            vAgent.pos = 0.0
+            vAgent.travel_time += next_event
+            #add density on new edge
+            haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
+            ##RSU Optimization module
+            if !haskey(stats_densities, c_edge) || densities[c_edge] > stats_densities[c_edge]
+                stats_densities[c_edge] = densities[c_edge]
+            end
+            ##
+            update_weights!(speeds, Dict(c_edge => densities[c_edge],
+                                        p_edge => densities[p_edge]),
+                                        max_densities, max_speeds)
+        end
+        #update other agents position
+        for i = 1:N
+            if active[i] == 1 && i != ID
+                a = Agents[i]
+                a.pos = a.pos + next_event*speeds[a.edge[1],a.edge[2]]
+                a.travel_time += next_event
+            end
+        end
+    end
+    #Percentage difference in initial and real travel time
+    timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
+    return counter, maximum(traffictime), timediff, stats_densities, AgentsCopy
 end

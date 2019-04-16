@@ -4,7 +4,7 @@ module RSUOptimization
 using OpenStreetMapX
 using StatsBase
 using SparseArrays
-using Iterators
+using Base.Iterators
 
 #types
 export Agent

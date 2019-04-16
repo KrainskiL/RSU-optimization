@@ -10,8 +10,9 @@ End = ((39.50,-119.80),(39.55,-119.76))
 
 @time output = simulation(1000, [Start], [End], map_data)
 
-RSU_list = optimize_RSU_location(map_data, output[4], 500.0, 100, 1.0, 0.05)
-sum(values(RSU_list))*1000
+output2 = simulation_ITS
+
+
 """
 Ns = [10, 100, 500, 1000, 2000]
 ResultsVec = Vector()
