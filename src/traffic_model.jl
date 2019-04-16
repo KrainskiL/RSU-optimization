@@ -72,24 +72,6 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
     #Percentage difference in initial and real travel time
     timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
 
-    #Znajdz node z najwiekszym zagregowanych ruchem
-    #Sprawdz ile jest ruchu w zasiegu z tego punktu wstaw ceil(N/limit) RSU
-    #Usun obsluzony ruch z nodow
-    #POWTORZ AZ sum(values(traffic_dict)) == 0
-
-    ##RSU Optimization module
-    function optimize_RSU_location(map::MapData, stats::Dict{Array{Int64,1},Int64},
-        range::Float64, throughput::UInt64, α::Float64, ϵ::Float64)
-        RSUs = Dict{Int64,Int64}()
-    #Gather traffic in nodes
-    nodes_traffic = Dict{Int,Int}()
-    for (key,val) in stats
-        map(x-> haskey(nodes_traffic,x) ? nodes_traffic[x]+=val : nodes_traffic[x]=val, key)
-    end
-    #Place new RSUs in node with highest traffic
-    traffic, node = findmax(nodes_traffic)
-    RSUs[node] = ceil(traffic/range)
-    end
     return counter, maximum(traffictime), timediff, stats_densities
 end
 
