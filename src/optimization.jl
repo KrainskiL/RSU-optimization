@@ -43,9 +43,20 @@ function optimize_RSU_location(map_data::MapData, stats::Dict{Array{Int64,1},Int
         #Sum traffic on edges in range
         N = sum([temp[e] for e in rng_edges])
         #Place new RSUs in node
-        RSUs[maxnode] = ceil(N/(0.5*length(rng_edges)*throughput))
+        RSUs[maxnode_mapv] = ceil(N/(0.5*length(rng_edges)*throughput))
         #Delete all traffic in covered edges
         for e in rng_edges temp[e] = 0 end
     end
     return RSUs
+end
+
+function get_agent_coor(map_data::MapData, inAgent::Agent)
+    if inAgent.pos == 0.0 return map_data.nodes[inAgent.route[1]] end
+    pA = map_data.nodes[inAgent.route[1]]
+    pB = map_data.nodes[inAgent.route[2]]
+    rel_pos = inAgent.pos/map_data.w[inAgent.edge[1],inAgent.edge[2]]
+    Agent_coor = ENU(pA.east+(pB.east-pA.east)*rel_pos,
+                    pA.north+(pB.north-pA.north)*rel_pos,
+                    pA.up+(pB.up-pA.up)*rel_pos)
+    return Agent_coor
 end

@@ -105,6 +105,7 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
     RSU_Dict = optimize_RSU_location(map_data, stats, range, throughput, α, ϵ)
     active = ones(Int,1,N)
     traffictime = zeros(N)
+    next_update = update_period
     #Initital velocities on edges
     densities = countmap([a.edge for a in Agents])
     ##RSU Optimization module
@@ -128,6 +129,54 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
             end
         end
         next_event, ID = findmin(simtime)
+        #Check if weight updates occur before next_event time
+        if next_update < next_event
+            #Initialize tracking array for given update
+            update_received = zeros(Int,N,2)
+            RSUs_thput = Dict([k=>RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
+            #Update position of all agents
+            for i = 1:N
+                if active[i] == 1
+                    a = Agents[i]
+                    a.pos = a.pos + next_update*speeds[a.edge[1],a.edge[2]]
+                    a.travel_time += next_update
+                    #Mark all agents receiveing an update
+                    #Find RSUs in which range agent is in
+                    RSU_ENU = Dict([k=>map_data.nodes[k] for k in keys(RSU_Dict)])
+                    Agent_coor = get_agent_coor(map_data, testAgent)
+                    RSU_in_range = [k for (k,v) in RSU_ENU if OpenStreetMapX.distance(Agent_coor, v) < range]
+                    if !isempty(RSU_in_range)
+                        #Check if any throughput is available
+                        in_range_thput = Dict(map(x->x=>RSUs_thput[x],RSU_in_range))
+                        if all(values(in_range_thput) .== 0)
+                            update_received[i,1] = -1
+                        else
+                            RSU_ID = findmax(in_range_thput)[2]
+                            RSUs_thput[RSU_ID] -= 1
+                            update_received[i,:] = [RSU_ID,1]
+                            #Re-route module
+                            #If k = 1 run deterministic algorithm
+                            if k == 1
+                                a.route[2:end] = OpenStreetMapX.fastest_route(map_data, a.route[2], a.end_node)[1]
+                            else
+                                
+                            end
+                            """
+                            Jesli mark=1 run reroute from route[2] to end_node
+                            1.Get k fastest routes and their distances
+                            2.Calculate probs based on Boltzmann distr
+                            3.Pick new route
+                            4.Check if route was changed - if yes add 1 to rerouting count
+                            5.continue
+                            """
+                        end
+                    end
+                end
+            end
+            #Calculate service availability
+            service_avblty = sum(update_received[:,2])/sum(active)
+
+        end
         vAgent = Agents[ID]
         #take agent from previous edge
         p_edge = vAgent.edge

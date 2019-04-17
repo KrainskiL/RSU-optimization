@@ -13,7 +13,7 @@ export Agent
 export generate_agents, pick_random_node
 export get_max_densities, update_weights!
 export simulation
-export optimize_RSU_location
+export optimize_RSU_location, get_agent_coor
 
 #files
 include("generate_agents.jl")
