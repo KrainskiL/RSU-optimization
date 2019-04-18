@@ -5,6 +5,7 @@
 `Agent` type stores information about agents
 
 **Fields**
+* `intelligent` : logical value indicating if agent communicate with RSUs
 * `start_node` : starting point of agent's route
 * `end_node` : ending point of agent's route
 * `route` : array of nodes determining agent's route (may be changed by re-routing)
@@ -14,23 +15,11 @@
 """
 
 mutable struct Agent
+    intelligent::Bool
     start_node::Int64
     end_node::Int64
     route::Union{Array{Int64,1}, Nothing}
     travel_time::Float64
     edge::Vector{Int64}
     pos::Float64
-end
-
-"""
-`RSU` type stores information about Road Side Units - V2I infrastructure
-
-**Fields**
-* [C] `ID` : unique identificator
-* [C] `Location` : node in which RSU is located
-"""
-
-struct RSU
-    ID::Int64
-    Location::Int64
 end

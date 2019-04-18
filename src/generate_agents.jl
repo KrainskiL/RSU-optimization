@@ -7,22 +7,22 @@
 Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 
 **Input parameters**
-* `map` : MapData type from OpenStreetMapX package
-* `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas;
+* `OSMmap` : mapData type object with data about road network
+* `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas
 
 """
 Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
-function pick_random_node(map::MapData, rects::Vector{Rect})
+function pick_random_node(OSMmap::OpenStreetMapX.MapData, rects::Vector{Rect})
     nodes_in_rects = Vector{Int}()
     for rect in rects
         frect = collect(Iterators.flatten(rect))
-        p1 = ENU(LLA(frect[1], frect[2]), map.bounds)
-        p2 = ENU(LLA(frect[3], frect[4]), map.bounds)
+        p1 = ENU(LLA(frect[1], frect[2]), OSMmap.bounds)
+        p2 = ENU(LLA(frect[3], frect[4]), OSMmap.bounds)
         exE = extrema([p1.east, p2.east])
         exN = extrema([p1.north, p2.north])
-        for key in keys(map.v)
-            if (exE[1] <= map.nodes[key].east <= exE[2] &&
-                exN[1] <= map.nodes[key].north <= exN[2])
+        for key in keys(OSMmap.v)
+            if (exE[1] <= OSMmap.nodes[key].east <= exE[2] &&
+                exN[1] <= OSMmap.nodes[key].north <= exN[2])
                 push!(nodes_in_rects, key)
             end
         end
@@ -37,28 +37,32 @@ for initial routes travelled with maximal speed
 
 **Input parameters**
 * `N` : number of agents to be generated
-
+* `StartArea` : vector of points corresponding to area from which agents randomly pick starting point
+* `EndArea` : vector of points corresponding to area from which agents randomly pick ending point
+* `OSMmap` : MapData type object with data about road network
 """
-function generate_agents(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
+function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
     AgentsArr = Vector{Agent}()
     times = Dict{Int,Float64}()
+    N_int= Int(ceil(N*α))
+    intelligent_ind = [trues(N_int); falses(N-N_int)]
     #Generating N agents
     for i in 1:N
         dist = Inf
         start_node = end_node = counter = time =  0
         init_route = Array{Int64,1}()
         while dist == Inf
-            start_node = pick_random_node(map, StartArea)
-            end_node = pick_random_node(map, EndArea)
-            init_route, dist, time = fastest_route(map, start_node, end_node)
+            start_node = pick_random_node(OSMmap, StartArea)
+            end_node = pick_random_node(OSMmap, EndArea)
+            init_route, dist, time = fastest_route(OSMmap, start_node, end_node)
             counter +=1
             if counter == 100
                 error("Route from starting to ending point can't be calculated.")
             end
         end
         times[i] = time
-        firstEdge = [map.v[init_route[1]], map.v[init_route[2]]]
-        NewAgent = Agent(start_node, end_node, init_route, 0.0, firstEdge, 0.0)
+        firstEdge = [OSMmap.v[init_route[1]], OSMmap.v[init_route[2]]]
+        NewAgent = Agent(intelligent_ind[i], start_node, end_node, init_route, 0.0, firstEdge, 0.0)
         push!(AgentsArr, NewAgent)
     end
     return AgentsArr, times

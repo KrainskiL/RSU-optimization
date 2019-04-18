@@ -1,19 +1,31 @@
 ###################################
 ## Discrete events traffic model ##
 ###################################
+"""
+`base_simulation` run simulation without ITS.
 
-function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map::MapData)
-    Agents, inititaltime = generate_agents(N, StartArea, EndArea, map)
+**Input parameters**
+* `OSMmap` : MapData type object with data about road network
+* `stats` : dictionary with highest traffic density on edges during base simulation run
+* `range` : range of RSUs
+* `throughput` : number of agents RSU can serve at once
+* `α` : required service availabilty/data coverage α ∈ <0,1>
+* `ϵ` : service availabilty tolerance - all weights updates must be within α ± ϵ
+"""
+
+function base_simulation(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
+    Agents, inititaltime = generate_agents(OSMmap, N, StartArea, EndArea, α)
     AgentsCopy = deepcopy(Agents)
     active = ones(Int,1,N)
     traffictime = zeros(N)
     #Initital velocities on edges
     densities = countmap([a.edge for a in Agents])
+    int_densities = countmap([a.edge for a in Agents if a.intelligent])
     ##RSU Optimization module
-    stats_densities = deepcopy(densities)
+    stats_densities = deepcopy(int_densities)
     ##
-    max_densities = get_max_densities(map, 5.0)
-    max_speeds = OpenStreetMapX.get_velocities(map)
+    max_densities = get_max_densities(OSMmap, 5.0)
+    max_speeds = OpenStreetMapX.get_velocities(OSMmap)
     speeds = deepcopy(max_speeds)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
@@ -25,7 +37,7 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
         for i = 1:N
             if active[i] == 1
                 A = Agents[i]
-                simtime[i] = (map.w[A.edge[1], A.edge[2]] - A.pos)/
+                simtime[i] = (OSMmap.w[A.edge[1], A.edge[2]] - A.pos)/
                 speeds[A.edge[1], A.edge[2]]
             end
         end
@@ -34,6 +46,7 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
         #take agent from previous edge
         p_edge = vAgent.edge
         densities[p_edge] -= 1
+        if vAgent.intelligent int_densities[p_edge] -= 1 end
         #change agent's route and current edge or remove if destination reached
         if length(vAgent.route[2:end]) == 1
             #disable agent
@@ -46,15 +59,18 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
                                         max_densities, max_speeds)
         else
             vAgent.route = vAgent.route[2:end]
-            c_edge = [map.v[vAgent.route[1]], map.v[vAgent.route[2]]]
+            c_edge = [OSMmap.v[vAgent.route[1]], OSMmap.v[vAgent.route[2]]]
             vAgent.edge = c_edge
             vAgent.pos = 0.0
             vAgent.travel_time += next_event
             #add density on new edge
             haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
+            if vAgent.intelligent
+                haskey(int_densities, c_edge) ? int_densities[c_edge] += 1 : int_densities[c_edge] = 1
+            end
             ##RSU Optimization module
-            if !haskey(stats_densities, c_edge) || densities[c_edge] > stats_densities[c_edge]
-                stats_densities[c_edge] = densities[c_edge]
+            if vAgent.intelligent && (!haskey(stats_densities, c_edge) || int_densities[c_edge] > stats_densities[c_edge])
+                stats_densities[c_edge] = int_densities[c_edge]
             end
             ##
             update_weights!(speeds, Dict(c_edge => densities[c_edge],
@@ -76,19 +92,19 @@ function simulation(N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, map:
 end
 
 
-function get_max_densities(map::MapData, density_factor::Float64)
+function get_max_densities(OSMmap::MapData, density_factor::Float64)
     roads_lanes = Dict{Int64,Int64}()
-    for r in map.roadways
+    for r in OSMmap.roadways
         OpenStreetMapX.haslanes(r) ? lanes = OpenStreetMapX.getlanes(r) : lanes = 1
         roads_lanes[r.id] = lanes
     end
-    segments = OpenStreetMapX.find_segments(map.nodes, map.roadways, map.intersections)
-    segments = [[map.v[s.node0], map.v[s.node1], roads_lanes[s.parent]] for s in segments]
+    segments = OpenStreetMapX.find_segments(OSMmap.nodes, OSMmap.roadways, OSMmap.intersections)
+    segments = [[OSMmap.v[s.node0], OSMmap.v[s.node1], roads_lanes[s.parent]] for s in segments]
     sparse_lanes = SparseArrays.sparse([x[1] for x in segments],
                                         [x[2] for x in segments],
                                         [x[3] for x in segments],
-                                        length(map.v),length(map.v))
-    return map.w .* sparse_lanes / density_factor
+                                        length(OSMmap.v),length(OSMmap.v))
+    return OSMmap.w .* sparse_lanes / density_factor
 end
 
 function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64}, rho::Dict,
@@ -99,20 +115,17 @@ function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64}, rho::Dict
 end
 
 
-function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Array{Int64,1},Int64},
+function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Array{Int64,1},Int64},
     range::Float64, throughput::Int64, α::Float64, ϵ::Float64, update_period::Int64)
     #Find optimal RSUs location
-    RSU_Dict = optimize_RSU_location(map_data, stats, range, throughput, α, ϵ)
+    RSU_Dict = optimize_RSU_location(OSMmap, stats, range, throughput, α, ϵ)
     active = ones(Int,1,N)
     traffictime = zeros(N)
     next_update = update_period
     #Initital velocities on edges
     densities = countmap([a.edge for a in Agents])
-    ##RSU Optimization module
-    stats_densities = deepcopy(densities)
-    ##
-    max_densities = get_max_densities(map_data, 5.0)
-    max_speeds = OpenStreetMapX.get_velocities(map_data)
+    max_densities = get_max_densities(OSMmap, 5.0)
+    max_speeds = OpenStreetMapX.get_velocities(OSMmap)
     speeds = deepcopy(max_speeds)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
@@ -124,7 +137,7 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
         for i = 1:N
             if active[i] == 1
                 A = Agents[i]
-                simtime[i] = (map.w[A.edge[1], A.edge[2]] - A.pos)/
+                simtime[i] = (OSMmap.w[A.edge[1], A.edge[2]] - A.pos)/
                 speeds[A.edge[1], A.edge[2]]
             end
         end
@@ -142,12 +155,12 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
                     a.travel_time += next_update
                     #Mark all agents receiveing an update
                     #Find RSUs in which range agent is in
-                    RSU_ENU = Dict([k=>map_data.nodes[k] for k in keys(RSU_Dict)])
-                    Agent_coor = get_agent_coor(map_data, testAgent)
-                    RSU_in_range = [k for (k,v) in RSU_ENU if OpenStreetMapX.distance(Agent_coor, v) < range]
+                    RSU_ENU = Dict([k=>OSMmap.nodes[k] for k in keys(RSU_Dict)])
+                    Agent_coor = get_agent_coor(OSMmap, testAgent)
+                    RSU_in_range = [k for (k,v) in RSU_ENU if OpenStreetOSMmapX.distance(Agent_coor, v) < range]
                     if !isempty(RSU_in_range)
                         #Check if any throughput is available
-                        in_range_thput = Dict(map(x->x=>RSUs_thput[x],RSU_in_range))
+                        in_range_thput = Dict(OSMmap(x->x=>RSUs_thput[x],RSU_in_range))
                         if all(values(in_range_thput) .== 0)
                             update_received[i,1] = -1
                         else
@@ -157,9 +170,9 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
                             #Re-route module
                             #If k = 1 run deterministic algorithm
                             if k == 1
-                                a.route[2:end] = OpenStreetMapX.fastest_route(map_data, a.route[2], a.end_node)[1]
+                                a.route[2:end] = OpenStreetOSMmapX.fastest_route(OSMmap, a.route[2], a.end_node)[1]
                             else
-                                
+
                             end
                             """
                             Jesli mark=1 run reroute from route[2] to end_node
@@ -193,7 +206,7 @@ function simulation_ITS(map_data::MapData, Agents::Vector{Agent}, stats::Dict{Ar
                                         max_densities, max_speeds)
         else
             vAgent.route = vAgent.route[2:end]
-            c_edge = [map.v[vAgent.route[1]], map.v[vAgent.route[2]]]
+            c_edge = [OSMmap.v[vAgent.route[1]], OSMmap.v[vAgent.route[2]]]
             vAgent.edge = c_edge
             vAgent.pos = 0.0
             vAgent.travel_time += next_event
