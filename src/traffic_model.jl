@@ -88,7 +88,7 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vect
     end
     #Percentage difference in initial and real travel time
     timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
-    return counter, maximum(traffictime), timediff, stats_densities, AgentsCopy
+    return counter, maximum(traffictime), timediff, traffictime, stats_densities, AgentsCopy
 end
 
 
@@ -116,12 +116,16 @@ end
 
 
 function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Array{Int64,1},Int64},
-    range::Float64, throughput::Int64, α::Float64, ϵ::Float64, update_period::Int64)
+    range::Float64, throughput::Int64, α::Float64, ϵ::Float64, update_period::Int64, T::Float64)
     #Find optimal RSUs location
-    RSU_Dict = optimize_RSU_location(OSMmap, stats, range, throughput, α, ϵ)
+    N = length(Agents)
+    RSU_Dict = optimize_RSU_location(OSMmap, stats, range, throughput)
+    RSUs_thput = Dict([k=>RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
+    RSU_ENU = Dict([k=>OSMmap.nodes[k] for k in keys(RSU_Dict)])
     active = ones(Int,1,N)
+    times_rerouted = zeros(Int,1,N)
     traffictime = zeros(N)
-    next_update = update_period
+    service_avblty = Vector{Float64}()
     #Initital velocities on edges
     densities = countmap([a.edge for a in Agents])
     max_densities = get_max_densities(OSMmap, 5.0)
@@ -129,7 +133,8 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
     speeds = deepcopy(max_speeds)
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Starting simulation
-    simtime = Dict{Int, Float64}()
+    simtime = 0.0
+    events = Dict{Int, Float64}()
     counter = 0
     while sum(active) != 0
         counter += 1
@@ -137,16 +142,17 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
         for i = 1:N
             if active[i] == 1
                 A = Agents[i]
-                simtime[i] = (OSMmap.w[A.edge[1], A.edge[2]] - A.pos)/
+                events[i] = (OSMmap.w[A.edge[1], A.edge[2]] - A.pos)/
                 speeds[A.edge[1], A.edge[2]]
             end
         end
-        next_event, ID = findmin(simtime)
+        next_event, ID = findmin(events)
+        next_update = (simtime ÷ update_period + 1)*update_period - simtime
         #Check if weight updates occur before next_event time
         if next_update < next_event
             #Initialize tracking array for given update
             update_received = zeros(Int,N,2)
-            RSUs_thput = Dict([k=>RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
+            thput_counter = deepcopy(RSUs_thput)
             #Update position of all agents
             for i = 1:N
                 if active[i] == 1
@@ -155,41 +161,47 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
                     a.travel_time += next_update
                     #Mark all agents receiveing an update
                     #Find RSUs in which range agent is in
-                    RSU_ENU = Dict([k=>OSMmap.nodes[k] for k in keys(RSU_Dict)])
-                    Agent_coor = get_agent_coor(OSMmap, testAgent)
-                    RSU_in_range = [k for (k,v) in RSU_ENU if OpenStreetOSMmapX.distance(Agent_coor, v) < range]
+                    Agent_coor = get_agent_coor(OSMmap, a)
+                    RSU_in_range = [k for (k,v) in RSU_ENU if OpenStreetMapX.distance(Agent_coor, v) < range]
                     if !isempty(RSU_in_range)
                         #Check if any throughput is available
-                        in_range_thput = Dict(OSMmap(x->x=>RSUs_thput[x],RSU_in_range))
+                        in_range_thput = Dict(OSMmap(x->x=>thput_counter[x],RSU_in_range))
                         if all(values(in_range_thput) .== 0)
                             update_received[i,1] = -1
                         else
                             RSU_ID = findmax(in_range_thput)[2]
-                            RSUs_thput[RSU_ID] -= 1
+                            thput_counter[RSU_ID] -= 1
                             update_received[i,:] = [RSU_ID,1]
                             #Re-route module
                             #If k = 1 run deterministic algorithm
+                            previous_route = a.route[2:end]
+                            k_routes = LightGraphs.yen_k_shortest_paths(OSMmap.g, OSMmap.v[a.route[2]], a.end_node, OSMmap.w./speeds, k)
                             if k == 1
-                                a.route[2:end] = OpenStreetOSMmapX.fastest_route(OSMmap, a.route[2], a.end_node)[1]
+                                a.route[2:end] = k_routes.paths[1]
                             else
-
+                                #Normalize k-paths travelling time
+                                norm_time = k_routes.dists/maximum(k_routes.dists)
+                                exp_ntime = exp.(-norm_time/T)
+                                #Calculate probability of being picked for every route
+                                probs = exp_ntime/sum(exp_ntime)
+                                #Assign new route
+                                a.route[2:end] = sample(k_routes.paths, StatsBase.weights(probs))
+                                times_rerouted[i] +=1
                             end
-                            """
-                            Jesli mark=1 run reroute from route[2] to end_node
-                            1.Get k fastest routes and their distances
-                            2.Calculate probs based on Boltzmann distr
-                            3.Pick new route
-                            4.Check if route was changed - if yes add 1 to rerouting count
-                            5.continue
-                            """
+                            #Increase reroute count if route was changed
+                            if previous_route != a.route[2:end] times_rerouted[i]+=1 end
                         end
                     end
                 end
             end
             #Calculate service availability
-            service_avblty = sum(update_received[:,2])/sum(active)
-
+            service_avblty = [service_avblty; sum(update_received[:,2])/sum(active)]
+            #Skip to next iteration
+            simtime += next_update
+            continue
         end
+
+        simtime += next_event
         vAgent = Agents[ID]
         #take agent from previous edge
         p_edge = vAgent.edge
@@ -197,10 +209,10 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
         #change agent's route and current edge or remove if destination reached
         if length(vAgent.route[2:end]) == 1
             #disable agent
-            traffictime[ID] = vAgent.travel_time + next_event
+            traffictime[ID] = simtime
             vAgent.pos = 0.0
             active[ID] = 0
-            simtime[ID] = Inf
+            events[ID] = Inf
             println("Active agents $(sum(active))")
             update_weights!(speeds, Dict(p_edge => densities[p_edge]),
                                         max_densities, max_speeds)
@@ -209,14 +221,9 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
             c_edge = [OSMmap.v[vAgent.route[1]], OSMmap.v[vAgent.route[2]]]
             vAgent.edge = c_edge
             vAgent.pos = 0.0
-            vAgent.travel_time += next_event
+            vAgent.travel_time = simtime
             #add density on new edge
             haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
-            ##RSU Optimization module
-            if !haskey(stats_densities, c_edge) || densities[c_edge] > stats_densities[c_edge]
-                stats_densities[c_edge] = densities[c_edge]
-            end
-            ##
             update_weights!(speeds, Dict(c_edge => densities[c_edge],
                                         p_edge => densities[p_edge]),
                                         max_densities, max_speeds)
@@ -226,11 +233,11 @@ function simulation_ITS(OSMmap::MapData, Agents::Vector{Agent}, stats::Dict{Arra
             if active[i] == 1 && i != ID
                 a = Agents[i]
                 a.pos = a.pos + next_event*speeds[a.edge[1],a.edge[2]]
-                a.travel_time += next_event
+                a.travel_time = simtime
             end
         end
     end
     #Percentage difference in initial and real travel time
-    timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
-    return counter, maximum(traffictime), timediff, stats_densities, AgentsCopy
+    #timediff = [(traffictime[i]-inititaltime[i])/inititaltime[i]*100 for i in 1:N]
+    return counter, simtime, traffictime, service_avblty
 end
