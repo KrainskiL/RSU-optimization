@@ -7,7 +7,7 @@
 Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 
 **Input parameters**
-* `OSMmap` : mapData type object with data about road network
+* `OSMmap` : mapData type object with road network data
 * `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas
 
 """
@@ -36,16 +36,21 @@ end
 for initial routes travelled with maximal speed
 
 **Input parameters**
+* `OSMmap` : MapData type object with road network data
 * `N` : number of agents to be generated
 * `StartArea` : vector of points corresponding to area from which agents randomly pick starting point
 * `EndArea` : vector of points corresponding to area from which agents randomly pick ending point
-* `OSMmap` : MapData type object with data about road network
+* `α` : percentage of smart agentss
 """
+
 function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
+    #Initialize empty working variables
     AgentsArr = Vector{Agent}()
     times = Dict{Int,Float64}()
+    dists = Dict{Int,Float64}()
+    #Indicate smart agents
     N_int= Int(ceil(N*α))
-    intelligent_ind = [trues(N_int); falses(N-N_int)]
+    smart_ind = [trues(N_int); falses(N-N_int)]
     #Generating N agents
     for i in 1:N
         dist = Inf
@@ -61,9 +66,11 @@ function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vect
             end
         end
         times[i] = time
+        dists[i] = dist
+        #First edge in vertices notation
         firstEdge = [OSMmap.v[init_route[1]], OSMmap.v[init_route[2]]]
-        NewAgent = Agent(intelligent_ind[i], start_node, end_node, init_route, 0.0, firstEdge, 0.0)
+        NewAgent = Agent(smart_ind[i], start_node, end_node, init_route, 0.0, firstEdge, 0.0, true)
         push!(AgentsArr, NewAgent)
     end
-    return AgentsArr, times
+    return AgentsArr, times, dists
 end

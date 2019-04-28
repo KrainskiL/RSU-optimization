@@ -5,21 +5,31 @@ using OpenStreetMapX
 using StatsBase
 using SparseArrays
 using Base.Iterators
+using LightGraphs
 
 #types
 export Agent
 
 #functions
+#generate_agents.jl
 export generate_agents, pick_random_node
-export get_max_densities, update_weights!
+#optimization.jl
+export optimize_RSU_location, get_agent_coordinates
+#rerouting.jl
+
+#simulations.jl
 export base_simulation, simulation_ITS
-export optimize_RSU_location, get_agent_coor
+#traffic_model.jl
+export get_max_densities, traffic_constants, init_traffic_variables, next_edge
+export update_weights!, update_event_agent!, update_smart_densities!, update_agents_position!
 
 #files
-include("generate_agents.jl")
 include("types.jl")
-include("traffic_model.jl")
+include("generate_agents.jl")
 include("optimization.jl")
+include("rerouting.jl")
+include("simulations.jl")
+include("traffic_model.jl")
 
 
 end

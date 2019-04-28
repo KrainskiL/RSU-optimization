@@ -14,7 +14,10 @@
 * `ϵ` : service availabilty tolerance - all weights updates must be within α ± ϵ
 """
 
-function optimize_RSU_location(OSMmap::MapData, stats::Dict{Array{Int64,1},Int64}, range::Float64, throughput::Int64)
+function optimize_RSU_location(OSMmap::MapData,
+                                stats::Dict{Array{Int64,1},Int64},
+                                range::Float64,
+                                throughput::Int64)
     RSUs = Dict{Int64,Int64}()
     #Create working dictionary
     temp = deepcopy(stats)
@@ -49,11 +52,19 @@ function optimize_RSU_location(OSMmap::MapData, stats::Dict{Array{Int64,1},Int64
     return RSUs
 end
 
-function get_agent_coor(map_data::MapData, inAgent::Agent)
-    if inAgent.pos == 0.0 return map_data.nodes[inAgent.route[1]] end
-    pA = map_data.nodes[inAgent.route[1]]
-    pB = map_data.nodes[inAgent.route[2]]
-    rel_pos = inAgent.pos/map_data.w[inAgent.edge[1],inAgent.edge[2]]
+"""
+`get_agent_coordinates` return agents coordinates in ENU system
+
+**Input parameters**
+* `OSMmap` : MapData type object with road network data
+* `inAgent` : agent which current coordinates are requested
+"""
+
+function get_agent_coordinates(OSMmap::MapData, inAgent::Agent)
+    if inAgent.pos == 0.0 return OSMmap.nodes[inAgent.route[1]] end
+    pA = OSMmap.nodes[inAgent.route[1]]
+    pB = OSMmap.nodes[inAgent.route[2]]
+    rel_pos = inAgent.pos/OSMmap.w[inAgent.edge[1],inAgent.edge[2]]
     Agent_coor = ENU(pA.east+(pB.east-pA.east)*rel_pos,
                     pA.north+(pB.north-pA.north)*rel_pos,
                     pA.up+(pB.up-pA.up)*rel_pos)
