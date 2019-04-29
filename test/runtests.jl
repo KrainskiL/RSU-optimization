@@ -4,7 +4,7 @@ using RSUOptimization
 using Random
 using SparseArrays
 
-test_map = OpenStreetMapX.get_map_data("C:/RSUOptimization.jl/example/reno_east3.osm", use_cache = false)
+test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
 Rect1 = ((39.50,-119.70),(39.55,-119.74))
 Rect2 = ((39.50,-119.80),(39.55,-119.76))
 AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)
@@ -101,7 +101,7 @@ end
 
 avg_s_densities = init_traffic_variables(test_map, AgentsSet, true)[3]
 
-RSUs = optimize_RSU_location(test_map, avg_s_densities, 100.0, 100)
+RSUs = optimize_RSU_location(test_map, 100.0, 100, "cover_all_nodes", AgentsSet)
 @test rand(keys(RSUs)) in keys(test_map.v)
 @test typeof(sum(values(RSUs))) == Int64
 

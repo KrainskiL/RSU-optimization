@@ -6,7 +6,7 @@
 `optimize_RSU_location` function returns dictionary with number of RSUs in given nodes.
 
 **Input parameters**
-* `map` : MapData type from OpenStreetMapX package
+* `OSMmap` : MapData type from OpenStreetMapX package
 * `stats` : dictionary with highest traffic density on edges during base simulation run
 * `range` : range of RSUs
 * `throughput` : number of agents RSU can serve at once
@@ -15,41 +15,66 @@
 """
 
 function optimize_RSU_location(OSMmap::MapData,
-                                stats::Dict{Array{Int64,1},Float64},
                                 range::Float64,
-                                throughput::Int64)
+                                throughput::Int64,
+                                mode::String,
+                                mode_input)
     RSUs = Dict{Int64,Int64}()
-    #Create working dictionary
-    temp = deepcopy(stats)
-    while !isempty(temp)
-        #Divide traffic density by roads length - traffic per road unit
-        unit_density = Dict{Array{Int64,1},Float64}()
-        for k in keys(temp)
-            unit_density[k] = temp[k]/OSMmap.w[k[1],k[2]]
+    if mode == "cover_all_nodes"
+        #Count how many times each node was passed by in base simulation
+        passed_nodes = StatsBase.countmap(collect(Iterators.flatten(getfield.(mode_input, :route))))
+        while !isempty(passed_nodes)
+            #Find node with highest count
+            how_many, nodeID = findmax(passed_nodes)
+            #Gather count from all nodes in range
+            rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[nodeID], range)
+            #Filter rng_nodes - only include nodes which agents passed
+            rng_nodes = [n for n in rng_nodes if haskey(passed_nodes, n)]
+            sum_count = sum([passed_nodes[n] for n in rng_nodes])
+            #Calculate number of RSUs in node
+            N = max(1, ceil(sum_count/throughput*0.1))
+            RSUs[nodeID] = N
+            #Remove served nodes
+            for node in rng_nodes
+                delete!(passed_nodes, node)
+            end
         end
-        #Gather unit traffic in nodes
-        vertices_traffic = Dict{Int,Float64}()
-        for (key,val) in unit_density
-            map(x-> haskey(vertices_traffic, x) ? vertices_traffic[x]+=val : vertices_traffic[x]=val, key)
+        return RSUs
+    elseif mode == "average_density_based"
+        #Create working dictionary
+        temp = deepcopy(stats)
+        while !isempty(temp)
+            #Divide traffic density by roads length - traffic per road unit
+            unit_density = Dict{Array{Int64,1},Float64}()
+            for k in keys(temp)
+                unit_density[k] = temp[k]/OSMmap.w[k[1],k[2]]
+            end
+            #Gather unit traffic in nodes
+            vertices_traffic = Dict{Int,Float64}()
+            for (key,val) in unit_density
+                map(x-> haskey(vertices_traffic, x) ? vertices_traffic[x]+=val : vertices_traffic[x]=val, key)
+            end
+            #Node with highest aggregated traffic
+            maxvertex = findmax(vertices_traffic)[2]
+            maxnode = OSMmap.n[maxvertex]
+            #Find nodes within RSU range from chosen node
+            rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[maxnode], range)
+            rng_vertices = [OSMmap.v[k] for k in rng_nodes if haskey(OSMmap.v,k)]
+            #Transform vertices within range into edges
+            edges_product = collect.(vec(collect(Iterators.product(rng_vertices, rng_vertices))))
+            rng_edges = [p for p in edges_product if haskey(temp, p)]
+            if isempty(rng_edges) rng_edges = [k for k in keys(temp) if maxvertex in k] end
+            #Sum traffic on edges in range
+            N = sum([temp[e] for e in rng_edges])
+            #Place new RSUs in node
+            RSUs[maxnode] = max(1,ceil(N/(0.2*length(rng_edges)*throughput)))
+            #Delete all traffic in covered edges
+            for e in rng_edges delete!(temp, e) end
         end
-        #Node with highest aggregated traffic
-        maxvertex = findmax(vertices_traffic)[2]
-        maxnode = OSMmap.n[maxvertex]
-        #Find nodes within RSU range from chosen node
-        rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[maxnode], range)
-        rng_vertices = [OSMmap.v[k] for k in rng_nodes if haskey(OSMmap.v,k)]
-        #Transform vertices within range into edges
-        edges_product = collect.(vec(collect(Iterators.product(rng_vertices, rng_vertices))))
-        rng_edges = [p for p in edges_product if haskey(temp, p)]
-        if isempty(rng_edges) rng_edges = [k for k in keys(temp) if maxvertex in k] end
-        #Sum traffic on edges in range
-        N = sum([temp[e] for e in rng_edges])
-        #Place new RSUs in node
-        RSUs[maxnode] = max(1,ceil(N/(0.2*length(rng_edges)*throughput)))
-        #Delete all traffic in covered edges
-        for e in rng_edges delete!(temp, e) end
+        return RSUs
+    else
+        error("Wrong optimization mode.")
     end
-    return RSUs
 end
 
 """

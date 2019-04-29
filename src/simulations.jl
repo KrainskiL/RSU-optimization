@@ -70,7 +70,7 @@ function simulation_ITS(OSMmap::MapData,
     #Creating working copy of agents
     Agents = deepcopy(inAgents)
     #Find optimal RSUs locations
-    RSU_Dict = optimize_RSU_location(OSMmap, stats, range, throughput)
+    RSU_Dict = optimize_RSU_location(OSMmap, range, throughput, "cover_all_nodes", Agents)
     RSU_ENU = Dict([OSMmap.nodes[k] => RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
 
     #Initialize statistic vectors
@@ -96,7 +96,7 @@ function simulation_ITS(OSMmap::MapData,
         next_update = (simtime ÷ update_period + 1)*update_period - simtime
         #Check if weight updates occur before next_event time
         if next_update < event_time
-            println("Update $(simtime ÷ update_period) started")
+            println("Update $(simtime ÷ update_period + 1) started")
             #Update position of all agents
             update_agents_position!(Agents, next_update, speeds)
             #Send update to agents in range if throughput limit not reached
