@@ -4,7 +4,7 @@ using RSUOptimization
 using Random
 using SparseArrays
 
-test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
+test_map = OpenStreetMapX.get_map_data("C:/RSUOptimization.jl/example/reno_east3.osm", use_cache = false)
 Rect1 = ((39.50,-119.70),(39.55,-119.74))
 Rect2 = ((39.50,-119.80),(39.55,-119.76))
 AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)
@@ -36,7 +36,7 @@ end
 newAgents = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)[1]
 output = base_simulation(test_map, newAgents, 5.0)
 @test length(output) == 4
-@test typeof(output) == Tuple{Int64,Float64,Array{Float64,1},Dict{Array{Int64,1},Int64}}
+@test typeof(output) == Tuple{Int64,Float64,Array{Float64,1},Dict{Array{Int64,1},Float64}}
 
 end
 
@@ -69,11 +69,10 @@ max_d, max_s = traffic_constants(test_map, 5.0)
 @test max_d == max_dens && max_s == max_speeds
 
 #init_traffic_variables tests
-i_densities, i_speeds, s_densities, avg_s_densities = init_traffic_variables(test_map, AgentsSet, true)
+i_densities, i_speeds, avg_s_densities = init_traffic_variables(test_map, AgentsSet, true)
 @test sum(values(i_densities)) == 10
 @test i_speeds == max_speeds
-@test sum(values(s_densities)) == 5
-@test s_densities == avg_s_densities
+@test sum(values(avg_s_densities)) == 5
 
 #next_edge tests
 event = next_edge(AgentsSet, max_speeds, test_map.w)
@@ -88,7 +87,7 @@ update_event_agent!(AgentsSet[1],event[1], i_densities, test_map.v)
 
 #update_smart_densities! tests
 avg_before = deepcopy(avg_s_densities)
-update_smart_densities!(AgentsSet, avg_s_densities, 5)
+update_smart_densities!(AgentsSet, avg_s_densities, 10.0, 300.0, 10)
 @test avg_before != avg_s_densities
 
 #update_agents_position! tests
@@ -100,7 +99,7 @@ end
 #optimization.jl
 @testset "optimization" begin
 
-avg_s_densities = init_traffic_variables(test_map, AgentsSet, true)[4]
+avg_s_densities = init_traffic_variables(test_map, AgentsSet, true)[3]
 
 RSUs = optimize_RSU_location(test_map, avg_s_densities, 100.0, 100)
 @test rand(keys(RSUs)) in keys(test_map.v)

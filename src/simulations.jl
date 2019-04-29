@@ -16,12 +16,13 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData, inAgents::Vector{Agent}
     #Traffic characteristic constants
     max_densities, max_speeds = traffic_constants(OSMmap, density_factor)
     #Traffic characteristic variables
-    densities, speeds, smart_dens, avg_smart_dens = init_traffic_variables(OSMmap, Agents, true)
+    densities, speeds, avg_smart_dens = init_traffic_variables(OSMmap, Agents, true)
     #Initial speeds update
     update_weights!(speeds, densities, max_densities, max_speeds)
     #Initialize simulation variables
     simtime = 0.0
     steps = 0
+    counter = 2
     #Loop until all agents are deactivated
     while sum(getfield.(Agents,:active)) != 0
         steps += 1
@@ -37,7 +38,7 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData, inAgents::Vector{Agent}
         #Update speeds
         update_weights!(speeds, density_change, max_densities, max_speeds)
         #Update average density for smart cars
-        update_smart_densities!(Agents, avg_smart_dens, steps)
+        update_smart_densities!(Agents, avg_smart_dens, 50.0, simtime, counter)
     end
     times = getfield.(Agents,:travel_time)
     return steps, simtime, times, avg_smart_dens
@@ -60,7 +61,7 @@ end
 function simulation_ITS(OSMmap::MapData,
                         inAgents::Vector{Agent},
                         density_factor::Float64,
-                        stats::Dict{Array{Int64,1},Int64},
+                        stats::Dict{Array{Int64,1},Float64},
                         range::Float64,
                         throughput::Int64,
                         update_period::Int64,
@@ -75,7 +76,7 @@ function simulation_ITS(OSMmap::MapData,
     #Initialize statistic vectors
     service_avblty = Vector{Float64}()
     RSUs_utilization = Vector{Dict{ENU, Int64}}()
-    no_updates = Vector{ENU}()
+    no_updates = Vector{Vector{ENU}}()
 
     #Traffic characteristic constants
     max_densities, max_speeds = traffic_constants(OSMmap, density_factor)
@@ -100,11 +101,12 @@ function simulation_ITS(OSMmap::MapData,
             update_agents_position!(Agents, next_update, speeds)
             #Send update to agents in range if throughput limit not reached
             updates, no_update, updt_utilization, updt_avblty = send_weights_update(Agents, OSMmap, RSU_ENU, range)
+            println("Simtime: $simtime")
             println("$(sum(updates)) : $(sum(getfield.(Agents, :active).*getfield.(Agents, :smart)))")
             #Update statistic variables
             service_avblty = [service_avblty; updt_avblty]
             RSUs_utilization = [RSUs_utilization; updt_utilization]
-            no_updates = [no_updates; no_update]
+            no_updates = [no_updates; [no_update]]
             #Reroute updated agents
             for i in 1:length(Agents)
                 updates[i] && k_shortest_path_rerouting!(OSMmap, Agents[i], speeds, k, T)

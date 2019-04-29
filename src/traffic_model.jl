@@ -75,9 +75,9 @@ function init_traffic_variables(OSMmap::MapData,
     initial_speeds = OpenStreetMapX.get_velocities(OSMmap)
     #For optimization purposes count density only for smart agents
     if optimization_stats
-        smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart])
-        avg_smart_densities = deepcopy(smart_densities)
-        return initial_densities, initial_speeds, smart_densities, avg_smart_densities
+        avg_smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart])
+        avg_smart_densities = Dict{Array{Int64,1},Float64}(avg_smart_densities)
+        return initial_densities, initial_speeds, avg_smart_densities
     end
     return initial_densities, initial_speeds
 end
@@ -159,14 +159,20 @@ end
 
 function update_smart_densities!(Agents::Vector{Agent},
                                 avg_smart_densities::Dict,
-                                step::Int64)
-    smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart && a.active])
-    for (k,v) in smart_densities
-        if haskey(avg_smart_densities, k)
-            avg_smart_densities[k] += (v - smart_densities[k])/step
-        else
-            avg_smart_densities[k] = (v - smart_densities[k])/step
+                                time_step::Float64,
+                                simtime::Float64,
+                                counter::Int64)
+    if (simtime ÷ time_step + 1) >= counter
+        smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart && a.active])
+        smart_densities = Dict{Array{Int64,1},Float64}(smart_densities)
+        for (k,v) in smart_densities
+            if haskey(avg_smart_densities, k)
+                avg_smart_densities[k] += (v - smart_densities[k])/counter
+            else
+                avg_smart_densities[k] = (v - smart_densities[k])/counter
+            end
         end
+        counter += 1
     end
 end
 

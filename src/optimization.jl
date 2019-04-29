@@ -15,13 +15,13 @@
 """
 
 function optimize_RSU_location(OSMmap::MapData,
-                                stats::Dict{Array{Int64,1},Int64},
+                                stats::Dict{Array{Int64,1},Float64},
                                 range::Float64,
                                 throughput::Int64)
     RSUs = Dict{Int64,Int64}()
     #Create working dictionary
     temp = deepcopy(stats)
-    while sum(values(temp)) > 0
+    while !isempty(temp)
         #Divide traffic density by roads length - traffic per road unit
         unit_density = Dict{Array{Int64,1},Float64}()
         for k in keys(temp)
@@ -40,14 +40,14 @@ function optimize_RSU_location(OSMmap::MapData,
         rng_vertices = [OSMmap.v[k] for k in rng_nodes if haskey(OSMmap.v,k)]
         #Transform vertices within range into edges
         edges_product = collect.(vec(collect(Iterators.product(rng_vertices, rng_vertices))))
-        rng_edges = [p for p in edges_product if haskey(temp, p) && temp[p] != 0]
+        rng_edges = [p for p in edges_product if haskey(temp, p)]
         if isempty(rng_edges) rng_edges = [k for k in keys(temp) if maxvertex in k] end
         #Sum traffic on edges in range
         N = sum([temp[e] for e in rng_edges])
         #Place new RSUs in node
-        RSUs[maxnode] = ceil(N/(0.5*length(rng_edges)*throughput))
+        RSUs[maxnode] = max(1,ceil(N/(0.2*length(rng_edges)*throughput)))
         #Delete all traffic in covered edges
-        for e in rng_edges temp[e] = 0 end
+        for e in rng_edges delete!(temp, e) end
     end
     return RSUs
 end
@@ -69,4 +69,57 @@ function get_agent_coordinates(OSMmap::MapData, inAgent::Agent)
                     pA.north+(pB.north-pA.north)*rel_pos,
                     pA.up+(pB.up-pA.up)*rel_pos)
     return Agent_coor
+end
+
+"""
+`ITS_quality_assess` return various measures describing ITS model quality
+
+**Input parameters**
+* `smart_ind` : vector with true flags for smart agents
+* `times_base` : agents travelling time in base scenario
+* `times_ITS` : agents travelling time in ITS scenario
+* `srvc_avblty` : vector with percentage service availability (from `simulation_ITS`)
+* `RSUs_util` : vector of dictionaries with RSUs utilization (from `simulation_ITS`)
+* `RSU_ENU` : vector of RSUs ENU coordinates
+* `range` : infrastructure transfer range
+* `failures` : array with ENU coordinates of smart agents missing an update (from `simulation_ITS`)
+"""
+
+function ITS_quality_assess(smart_ind::BitArray{1},
+                            times_base::Vector{Float64},
+                            times_ITS::Vector{Float64},
+                            srvc_avblty::Vector{Float64},
+                            RSUs_util,
+                            RSU_ENU::Vector{ENU},
+                            range::Float64,
+                            failures::Vector{Vector{ENU}})
+    perc_time_diff = (times_base - times_ITS)./times_base
+    #Means
+    mean_time_overall = round(mean(perc_time_diff), digits=3)
+    mean_time_smart = round(mean(perc_time_diff[smart_ind]), digits=3)
+    mean_time_not_smart = round(mean(perc_time_diff[.!smart_ind]), digits=3)
+    mean_srvc_avblty = round(mean(srvc_avblty), digits=3)
+    mean_RSUs_util = [mean(values(Dict)) for Dict in RSUs_util]
+    #Gather all results in one variable
+    mean_tuple = (overall_time = mean_time_overall,
+                    smart_time = mean_time_smart,
+                    other_time = mean_time_not_smart,
+                    service_availability = mean_srvc_avblty,
+                    RSUs_utilization = mean_RSUs_util)
+    #Categorize failures
+    failures_type = Vector{Vector{Bool}}()
+    for element in failures
+        failures_type_update = Vector{Bool}()
+        for e in element
+                if any([OpenStreetMapX.distance(RSU,e) <= range for RSU in RSU_ENU])
+                    push!(failures_type_update, false)
+                else
+                    push!(failures_type_update, true)
+                end
+        end
+        failures_type = [failures_type; [failures_type_update]]
+    end
+    mixed_out_of_range = hcat([sum(e) for e in failures_type],
+                                [sum(e)/length(e) for e in failures_type])
+    return mean_tuple, failures_type, mixed_out_of_range
 end
