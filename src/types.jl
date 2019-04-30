@@ -5,34 +5,23 @@
 `Agent` type stores information about agents
 
 **Fields**
-* `ID` : unique identificator
+* `smart` : logical value indicating if agent can communicate with RSUs
 * `start_node` : starting point of agent's route
 * `end_node` : ending point of agent's route
 * `route` : array of nodes determining agent's route (may be changed by re-routing)
 * `travel_time` : time spend in simulation
-* `edge` : dictionary with current edge agent represented by vertices and nodes
+* `edge` : current edge agent is on
 * `pos` : position on current edge
+* `active` : indicates if agent is active in simulation
 """
 
 mutable struct Agent
-    ID::Int64
+    smart::Bool
     start_node::Int64
     end_node::Int64
     route::Union{Array{Int64,1}, Nothing}
     travel_time::Float64
-    edge::Dict{String,Int}
+    edge::Vector{Int64}
     pos::Float64
-end
-
-"""
-`RSU` type stores information about Road Side Units - V2I infrastructure
-
-**Fields**
-* [C] `ID` : unique identificator
-* [C] `Location` : node in which RSU is located
-"""
-
-struct RSU
-    ID::Int64
-    Location::Int64
+    active::Bool
 end
