@@ -3,7 +3,7 @@ using RSUOptimization
 using StatsBase
 using LightGraphs
 using SparseArrays
-
+using Serialization
 #Creating MapData object
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
@@ -15,26 +15,35 @@ End = ((39.50,-119.80),(39.55,-119.76))
 
 #Proportion of smart agents
 α = 0.9
-N = 100
+N = 1000
 density_factor = 5.0
+range = 400.0
+throughput = 100
+updt_period = 200
 
 #Generating agents
 Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
 
-using IJulia
-notebook()
-
 #Running base simulation - no V2I system
 @time BaseOutput = base_simulation(map_data, Agents, density_factor)
 avg_density = BaseOutput[4]
+open("test2.bin", "w") do f
+    serialize(f, avg_density)
+end
+avg1 = deserialize(open("test2.bin"))
+RSU_ENU, Agents, failedENU = deserialize(open("packet.bin"))
+#@time ITSOutput = simulation_ITS(map_data, Agents, density_factor, avg_density, range, throughput, updt_period, 1.0, 1)
+@time ITSOutput, RSU_Dict = iterative_simulation_ITS(map_data, Agents, density_factor, avg_density, range, throughput, updt_period, 1.0, 2, 0.95, true)
 
-range = 400.0
-throughput = 10
-updt_period = 100
-@time ITSOutput = simulation_ITS(map_data, Agents, density_factor, avg_density, range, throughput, updt_period, 1.0, 1)
+ITSOutput
+RSU_Dict
 
-RSU_Dict = ITSOutput[4]
 RSU_ENU = [map_data.nodes[k] for k in keys(RSU_Dict)]
+packet = (RSU_ENU, Agents ,ITSOutput)
+open("packet.bin", "w") do f
+    serialize(f, packet)
+end
+
 means, fail_reasons, out_of_range = ITS_quality_assess(getfield.(Agents, :smart),
                                         BaseOutput[3],
                                         ITSOutput[3],
@@ -49,14 +58,8 @@ minimum(ITSOutput[5])
 mixed_out_of_range = hcat([sum(e) for e in fail_reasons],
                             [sum(e)/length(e) for e in fail_reasons])
 
-nodes_within_grid = unique(Iterators.flatten([OpenStreetMapX.nodes_within_range(map_data.nodes,n,range) for n in RSU_ENU]))
-sum([all([n in nodes_within_grid for n in a.route]) for a in Agents if a.smart])
-println([n in nodes_within_grid for n in Agents[5].route])
-
-
-nodes_density = StatsBase.countmap(collect(Iterators.flatten(getfield.(Agents, :route))))
-findmax(nodes_density))
-
+using IJulia
+notebook()
 IJulia.installkernel("Julia nodeps", "--depwarn=no")
 
 using PyCall

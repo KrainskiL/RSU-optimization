@@ -22,7 +22,7 @@ function optimize_RSU_location(OSMmap::MapData,
     RSUs = Dict{Int64,Int64}()
     if mode == "cover_all_nodes"
         #Count how many times each node was passed by in base simulation
-        passed_nodes = StatsBase.countmap(collect(Iterators.flatten(getfield.(mode_input, :route))))
+        passed_nodes = StatsBase.countmap(collect(Iterators.flatten([a.route for a in mode_input if a.smart])))
         while !isempty(passed_nodes)
             #Find node with highest count
             how_many, nodeID = findmax(passed_nodes)
@@ -77,6 +77,52 @@ function optimize_RSU_location(OSMmap::MapData,
     end
 end
 
+
+
+function reoptimize_RSU_location!(OSMmap::MapData,
+                                RSU_Dict::Dict{Int64,Int64},
+                                failed_coordinates::Vector{Vector{ENU}},
+                                range::Float64)
+    distinct_failed_ENUs = unique(collect(Iterators.flatten(failed_coordinates)))
+    RSU_ENU = [OSMmap.nodes[k] for k in keys(RSU_Dict)]
+    #Split set of coordinates according to reason of failure
+    failed_throughput = Vector{ENU}()
+    failed_range = Vector{ENU}()
+    for enu in distinct_failed_ENUs
+            if any([OpenStreetMapX.distance(RSU,enu) <= range for RSU in RSU_ENU])
+                push!(failed_throughput, enu)
+            else
+                push!(failed_range, enu)
+            end
+    end
+    #Handle agents who failed due to being out of range
+    dict_in_range = Dict{ENU,Array{Int64,1}}()
+    for elem in failed_range
+        dict_in_range[elem] = OpenStreetMapX.nodes_within_range(OSMmap.nodes, elem, range)
+        dict_in_range[elem] = [n for n in dict_in_range[elem] if haskey(OSMmap.v,n)]
+        isempty(dict_in_range[elem]) && delete!(dict_in_range, elem)
+    end
+    #Repeat until failed points are in RSUs range
+    while !isempty(dict_in_range)
+        nodes_count = StatsBase.countmap(collect(Iterators.flatten(values(dict_in_range))))
+        nodeID = findmax(nodes_count)[2]
+        #Put RSU in given node
+        RSU_Dict[nodeID] = 1
+        #Delete all points in new RSU range
+        for (k,v) in dict_in_range nodeID in v && delete!(dict_in_range, k) end
+    end
+
+    #Handle agents who failed due to reached transfer limit
+    nodes_throughput = Vector{Int64}()
+    for enu in failed_throughput
+        distance_dict = Dict([n=>OpenStreetMapX.distance(enu,OSMmap.nodes[n]) for n in keys(RSU_Dict)])
+        nodeID = findmin(distance_dict)[2]
+        !(nodeID in nodes_throughput) && push!(nodes_throughput,nodeID)
+    end
+    for n in nodes_throughput RSU_Dict[n] += 1 end
+    #Return updated dictionary
+    return RSU_Dict
+end
 """
 `get_agent_coordinates` return agents coordinates in ENU system
 
