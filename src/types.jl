@@ -14,7 +14,6 @@
 * `pos` : position on current edge
 * `active` : indicates if agent is active in simulation
 """
-
 mutable struct Agent
     smart::Bool
     start_node::Int64
@@ -24,4 +23,20 @@ mutable struct Agent
     edge::Vector{Int64}
     pos::Float64
     active::Bool
+end
+
+"""
+`RSU` type stores information about set of Road Side units in one node
+
+**Fields**
+* `node` : ID of node where RSU is located
+* `ENU` : ENU coordinates of the node
+* `count` : number of units in node
+* `total_thput` : total throughput of all units in the node
+"""
+mutable struct RSU
+    node::Int64
+    ENU::OpenStreetMapX.ENU
+    count::Int64
+    total_thput::Int64
 end

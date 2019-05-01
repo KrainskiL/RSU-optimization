@@ -66,19 +66,11 @@ end
 * `Agents` : set of agents created with generate_agents function
 * `optimization_stats` : switch for creating data used in RSUs optimization algorithm
 """
-
 function init_traffic_variables(OSMmap::MapData,
-                                      Agents::Vector{Agent},
-                                      optimization_stats::Bool = true)
+                                      Agents::Vector{Agent})
     #Initital densities on edges
     initial_densities = StatsBase.countmap([a.edge for a in Agents])
     initial_speeds = OpenStreetMapX.get_velocities(OSMmap)
-    #For optimization purposes count density only for smart agents
-    if optimization_stats
-        avg_smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart])
-        avg_smart_densities = Dict{Array{Int64,1},Float64}(avg_smart_densities)
-        return initial_densities, initial_speeds, avg_smart_densities
-    end
     return initial_densities, initial_speeds
 end
 
@@ -90,7 +82,6 @@ end
 * `speeds` : current speeds matrix
 * `lengths` : matrix with road lengths
 """
-
 function next_edge(Agents::Vector{Agent},
                     speeds::AbstractMatrix,
                     lengths::AbstractMatrix)
@@ -118,7 +109,6 @@ end
 * `vertices_map` : mapping from nodes to vertices
 * `debug` : debug switch
 """
-
 function update_event_agent!(inAgent::Agent,
                             curr_time::Float64,
                             densities::Dict,
@@ -149,34 +139,6 @@ function update_event_agent!(inAgent::Agent,
 end
 
 """
-`update_smart_densities!` updates average traffic density of smart cars in network
-
-**Input parameters**
-* `Agents` : set of agents created with generate_agents function
-* `avg_smart_densities` : dictionary with average density of smart cars on edges
-* `step` : current simulation step
-"""
-
-function update_smart_densities!(Agents::Vector{Agent},
-                                avg_smart_densities::Dict,
-                                time_step::Float64,
-                                simtime::Float64,
-                                counter::Int64)
-    if (simtime ÷ time_step + 1) >= counter
-        smart_densities = StatsBase.countmap([a.edge for a in Agents if a.smart && a.active])
-        smart_densities = Dict{Array{Int64,1},Float64}(smart_densities)
-        for (k,v) in smart_densities
-            if haskey(avg_smart_densities, k)
-                avg_smart_densities[k] += (v - smart_densities[k])/counter
-            else
-                avg_smart_densities[k] = (v - smart_densities[k])/counter
-            end
-        end
-        counter += 1
-    end
-end
-
-"""
 `update_agents_position!` change agents position on edge according to given time passed
 
 **Input parameters**
@@ -184,7 +146,6 @@ end
 * `time_passed` : time passed since last event
 * `speeds` : current speeds matrix
 """
-
 function update_agents_position!(Agents::Vector{Agent},
                                 time_passed::Float64,
                                 speeds::AbstractMatrix)

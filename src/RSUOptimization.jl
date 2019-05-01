@@ -8,7 +8,7 @@ using Base.Iterators
 using LightGraphs
 
 #types
-export Agent
+export Agent, RSU
 
 #functions
 #generate_agents.jl

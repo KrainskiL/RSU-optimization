@@ -7,88 +7,56 @@
 
 **Input parameters**
 * `OSMmap` : MapData type from OpenStreetMapX package
-* `stats` : dictionary with highest traffic density on edges during base simulation run
 * `range` : range of RSUs
 * `throughput` : number of agents RSU can serve at once
-* `α` : required service availabilty/data coverage α ∈ <0,1>
-* `ϵ` : service availabilty tolerance - all weights updates must be within α ± ϵ
+* `div_coeff` : adjustment factor for calculating number of RSUs in node
 """
-
 function optimize_RSU_location(OSMmap::MapData,
+                                inAgents::Vector{Agent},
                                 range::Float64,
                                 throughput::Int64,
-                                mode::String,
-                                mode_input)
-    RSUs = Dict{Int64,Int64}()
-    if mode == "cover_all_nodes"
-        #Count how many times each node was passed by in base simulation
-        passed_nodes = StatsBase.countmap(collect(Iterators.flatten([a.route for a in mode_input if a.smart])))
-        while !isempty(passed_nodes)
-            #Find node with highest count
-            how_many, nodeID = findmax(passed_nodes)
-            #Gather count from all nodes in range
-            rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[nodeID], range)
-            #Filter rng_nodes - only include nodes which agents passed
-            rng_nodes = [n for n in rng_nodes if haskey(passed_nodes, n)]
-            sum_count = sum([passed_nodes[n] for n in rng_nodes])
-            #Calculate number of RSUs in node
-            N = max(1, ceil(sum_count/throughput*0.1))
-            RSUs[nodeID] = N
-            #Remove served nodes
-            for node in rng_nodes
-                delete!(passed_nodes, node)
-            end
-        end
-        return RSUs
-    elseif mode == "average_density_based"
-        #Create working dictionary
-        temp = deepcopy(stats)
-        while !isempty(temp)
-            #Divide traffic density by roads length - traffic per road unit
-            unit_density = Dict{Array{Int64,1},Float64}()
-            for k in keys(temp)
-                unit_density[k] = temp[k]/OSMmap.w[k[1],k[2]]
-            end
-            #Gather unit traffic in nodes
-            vertices_traffic = Dict{Int,Float64}()
-            for (key,val) in unit_density
-                map(x-> haskey(vertices_traffic, x) ? vertices_traffic[x]+=val : vertices_traffic[x]=val, key)
-            end
-            #Node with highest aggregated traffic
-            maxvertex = findmax(vertices_traffic)[2]
-            maxnode = OSMmap.n[maxvertex]
-            #Find nodes within RSU range from chosen node
-            rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[maxnode], range)
-            rng_vertices = [OSMmap.v[k] for k in rng_nodes if haskey(OSMmap.v,k)]
-            #Transform vertices within range into edges
-            edges_product = collect.(vec(collect(Iterators.product(rng_vertices, rng_vertices))))
-            rng_edges = [p for p in edges_product if haskey(temp, p)]
-            if isempty(rng_edges) rng_edges = [k for k in keys(temp) if maxvertex in k] end
-            #Sum traffic on edges in range
-            N = sum([temp[e] for e in rng_edges])
-            #Place new RSUs in node
-            RSUs[maxnode] = max(1,ceil(N/(0.2*length(rng_edges)*throughput)))
-            #Delete all traffic in covered edges
-            for e in rng_edges delete!(temp, e) end
-        end
-        return RSUs
-    else
-        error("Wrong optimization mode.")
+                                div_coeff::Float64 = 0.1)
+    RSUs = Vector{RSU}()
+    #Count how many times each node was passed by smart agents in base simulation
+    passed_nodes = StatsBase.countmap(collect(Iterators.flatten([a.route for a in inAgents if a.smart])))
+    while !isempty(passed_nodes)
+        #Find node with highest count
+        nodeID = findmax(passed_nodes)[2]
+        #Gather count from all nodes in range
+        rng_nodes = OpenStreetMapX.nodes_within_range(OSMmap.nodes, OSMmap.nodes[nodeID], range)
+        #Filter rng_nodes - only include nodes which agents passed
+        rng_nodes = filter(n-> haskey(passed_nodes, n), rng_nodes)
+        sum_count = sum(map(n-> passed_nodes[n],rng_nodes))
+        #Calculate number of RSUs in node
+        N = Int(ceil(sum_count/throughput * div_coeff))
+        #Create new RSU entry and push it to RSUs list
+        new_RSU = RSU(nodeID, OSMmap.nodes[nodeID], N, N * throughput)
+        push!(RSUs, new_RSU)
+        #Remove served nodes
+        for node in rng_nodes delete!(passed_nodes, node) end
     end
+        return RSUs
 end
 
+"""
+`reoptimize_RSU_location` function adjust RSUs location and number to meet service availability and utilization criteria
 
-
+**Input parameters**
+* `OSMmap` : MapData type from OpenStreetMapX package
+* `range` : range of RSUs
+* `RSUs` : vector with RSUs used in simulation
+* `failed_coor` : vector of vectors with agents coordinates missing an update
+"""
 function reoptimize_RSU_location!(OSMmap::MapData,
-                                RSU_Dict::Dict{Int64,Int64},
-                                failed_coordinates::Vector{Vector{ENU}},
+                                RSUs::Vector{RSU},
+                                failed_coor::Vector{Vector{ENU}},
                                 range::Float64)
-    distinct_failed_ENUs = unique(collect(Iterators.flatten(failed_coordinates)))
-    RSU_ENU = [OSMmap.nodes[k] for k in keys(RSU_Dict)]
+    flat_ = unique(collect(Iterators.flatten(failed_coor)))
+    RSU_ENU = getfield.(RSUs, :ENU)
     #Split set of coordinates according to reason of failure
     failed_throughput = Vector{ENU}()
     failed_range = Vector{ENU}()
-    for enu in distinct_failed_ENUs
+    for enu in flat
             if any([OpenStreetMapX.distance(RSU,enu) <= range for RSU in RSU_ENU])
                 push!(failed_throughput, enu)
             else
@@ -123,6 +91,7 @@ function reoptimize_RSU_location!(OSMmap::MapData,
     #Return updated dictionary
     return RSU_Dict
 end
+
 """
 `get_agent_coordinates` return agents coordinates in ENU system
 
@@ -130,7 +99,6 @@ end
 * `OSMmap` : MapData type object with road network data
 * `inAgent` : agent which current coordinates are requested
 """
-
 function get_agent_coordinates(OSMmap::MapData, inAgent::Agent)
     if inAgent.pos == 0.0 return OSMmap.nodes[inAgent.route[1]] end
     pA = OSMmap.nodes[inAgent.route[1]]
@@ -155,7 +123,6 @@ end
 * `range` : infrastructure transfer range
 * `failures` : array with ENU coordinates of smart agents missing an update (from `simulation_ITS`)
 """
-
 function ITS_quality_assess(smart_ind::BitArray{1},
                             times_base::Vector{Float64},
                             times_ITS::Vector{Float64},

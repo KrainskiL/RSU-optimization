@@ -1,7 +1,7 @@
 ##################################
 ## Setting up agents properties ##
 ##################################
-
+Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
 """
 `pick_random_node` function is used to set starting and ending node of agents.
 Nodes are randomly chosen from set of rectangles corresponding to areas on map.
@@ -11,7 +11,6 @@ Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 * `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas
 
 """
-Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
 function pick_random_node(OSMmap::OpenStreetMapX.MapData, rects::Vector{Rect})
     nodes_in_rects = Vector{Int}()
     for rect in rects
@@ -42,7 +41,6 @@ for initial routes travelled with maximal speed
 * `EndArea` : vector of points corresponding to area from which agents randomly pick ending point
 * `α` : percentage of smart agentss
 """
-
 function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
     #Initialize empty working variables
     AgentsArr = Vector{Agent}()

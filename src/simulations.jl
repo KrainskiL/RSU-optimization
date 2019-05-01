@@ -8,40 +8,38 @@
 * `OSMmap` : MapData type object with road network data
 * `inAgents` : set of agents created with generate_agents function
 * `density_factor` : road length reserved for one vehicle
+* `debug` : debug messages switch
 """
-
-function base_simulation(OSMmap::OpenStreetMapX.MapData, inAgents::Vector{Agent}, density_factor::Float64 = 5.0)
-    #Creating working copy of agents
-    Agents = deepcopy(inAgents)
-    #Traffic characteristic constants
-    max_densities, max_speeds = traffic_constants(OSMmap, density_factor)
-    #Traffic characteristic variables
-    densities, speeds, avg_smart_dens = init_traffic_variables(OSMmap, Agents, true)
-    #Initial speeds update
-    update_weights!(speeds, densities, max_densities, max_speeds)
+function base_simulation(OSMmap::OpenStreetMapX.MapData,
+                        inAgents::Vector{Agent},
+                        density_factor::Float64 = 5.0,
+                        debug::Bool = true)
+    Agents = deepcopy(inAgents) #Creating working copy of agents
+    max_densities, max_speeds = traffic_constants(OSMmap, density_factor) #Traffic characteristic constants
+    densities, speeds = init_traffic_variables(OSMmap, Agents) #Traffic characteristic variables
+    update_weights!(speeds, densities, max_densities, max_speeds) #Initial speeds update
     #Initialize simulation variables
     simtime = 0.0
     steps = 0
-    counter = 2
+    active = sum(getfield.(Agents,:active))
+    if debug modulo = 10^(Int(round(Int, log10(length(Agents)))) - 1) end
     #Loop until all agents are deactivated
-    while sum(getfield.(Agents,:active)) != 0
+    while active != 0
         steps += 1
-        #Calculate next event time
-        event_time, ID = next_edge(Agents, speeds, OSMmap.w)
+        event_time, ID = next_edge(Agents, speeds, OSMmap.w) #Calculate next event time
         simtime += event_time
         vAgent = Agents[ID]
-        #Update all agents positions
-        update_agents_position!(Agents, event_time, speeds)
+        update_agents_position!(Agents, event_time, speeds) #Update all agents positions
         #Process agent connected with event
         density_change = update_event_agent!(vAgent, simtime, densities, OSMmap.v)
-        if length(density_change) == 1 && sum(getfield.(Agents,:active)) % 10 ==0 println("Active agents $(sum(getfield.(Agents,:active)))") end
-        #Update speeds
-        update_weights!(speeds, density_change, max_densities, max_speeds)
-        #Update average density for smart cars
-        update_smart_densities!(Agents, avg_smart_dens, 50.0, simtime, counter)
+        active = sum(getfield.(Agents,:active))
+        if debug && length(density_change) == 1 && active % modulo == 0
+            println("Active agents: $active")
+        end
+        update_weights!(speeds, density_change, max_densities, max_speeds) #Update speeds
     end
     times = getfield.(Agents,:travel_time)
-    return steps, simtime, times, avg_smart_dens
+    return steps, simtime, times
 end
 
 """
@@ -50,69 +48,66 @@ end
 **Input parameters**
 * `OSMmap` : MapData type object with road network data
 * `inAgents` : set of agents created with generate_agents function
-* `density_factor` : road length reserved for one vehicle
-* `stats` : average density of smart cars used for RSUs optimization
 * `range` : infrastructure transfer range
-* `throughput` : infrastructure transfer limit
+* `RSUs` : vector with RSUs used in simulation
 * `update_period` : period of weights updates
 * `T` : distribution parameter in k-shortest path rerouting
 * `k` : number of fastest routes generated in rerouting function
+* `density_factor` : road length reserved for one vehicle
+* `debug` : debug messages switch
 """
 function simulation_ITS(OSMmap::MapData,
                         inAgents::Vector{Agent},
-                        density_factor::Float64,
-                        stats::Dict{Array{Int64,1},Float64},
                         range::Float64,
-                        RSU_ENU::Dict{ENU,Int64},
+                        RSUs::Vector{RSU},
                         update_period::Int64,
-                        T::Float64,
-                        k::Int64,
+                        T::Float64 = 1.0,
+                        k::Int64 = 3,
+                        density_factor::Float64 = 5.0,
                         debug::Bool = true)
-    #Creating working copy of agents
-    Agents = deepcopy(inAgents)
-    #Traffic characteristic constants
-    max_densities, max_speeds = traffic_constants(OSMmap, density_factor)
+    Agents = deepcopy(inAgents) #Creating working copy of agents
+    max_densities, max_speeds = traffic_constants(OSMmap, density_factor) #Traffic characteristic constants
+    densities, speeds = init_traffic_variables(OSMmap, Agents) #Traffic characteristic variables
+    update_weights!(speeds, densities, max_densities, max_speeds) #Initial speeds update
+    #Initialize simulation variables
+    simtime = 0.0
+    steps = 0
+    active = sum(getfield.(Agents,:active))
+    if debug modulo = 10^(Int(round(Int, log10(length(Agents)))) - 1) end
+
     #Initialize statistic vectors
     RSUs_utilization = Vector{Dict{ENU, Int64}}()
     no_updates = Vector{Vector{ENU}}()
     service_avblty = Vector{Float64}()
-    #Traffic characteristic variables
-    densities, speeds = init_traffic_variables(OSMmap, Agents, false)
-    #Initial speeds update
-    update_weights!(speeds, densities, max_densities, max_speeds)
-    #Initialize simulation variables
-    simtime = 0.0
-    steps = 0
-    modulo = 10^Int(floor(log10(length(Agents))))
     #Loop until all agents are deactivated
-    while sum(getfield.(Agents,:active)) != 0
+    while active != 0
         steps += 1
-        #Calculate next edge change time
-        event_time, ID = next_edge(Agents, speeds, OSMmap.w)
-        #Calculate next weights update time
-        next_update = (simtime ÷ update_period + 1)*update_period - simtime
-        #Check if weight updates occur before next_event time
+        event_time, ID = next_edge(Agents, speeds, OSMmap.w) #Calculate next edge change time
+        #Calculate time to next weights update
+        next_update = (simtime ÷ update_period + 1) * update_period - simtime
+        #Check if weight updates occur before event_time
         if next_update < event_time
-            update_nr = Int(simtime ÷ update_period + 1)
-            #Update position of all agents
-            update_agents_position!(Agents, next_update, speeds)
+            if debug update_nr = Int(simtime ÷ update_period + 1) end
+            update_agents_position!(Agents, next_update, speeds) #Update position of all agents
             #Send update to agents in range if throughput limit not reached
-            updates, no_update, updt_utilization, updt_avblty = send_weights_update(Agents, OSMmap, RSU_ENU, range)
-            smart_active = sum(getfield.(Agents, :active).*getfield.(Agents, :smart))
-            perc_served = round(sum(updates)/smart_active*100, digits = 2)
-            debug && println("Update $update_nr: $(sum(updates))/$(smart_active) = $perc_served%")
+            updates, no_update, updt_util, updt_avblty = send_weights_update(Agents, OSMmap, RSUs, range)
+            if debug
+                smart_active = sum([1 for a in Agents if a.active && a.smart])
+                sum_updt = sum(updates)
+                perc_served = round(updt_avblty*100, digits = 2)
+                print("Update $update_nr | Service availability: $(sum_updt)/$(smart_active) = $perc_served%")
+            end
             #Update statistic variables
             service_avblty = [service_avblty; updt_avblty]
-            RSUs_utilization = [RSUs_utilization; updt_utilization]
+            RSUs_utilization = [RSUs_utilization; updt_util]
             no_updates = [no_updates; [no_update]]
             #Reroute updated agents
-            for i in 1:length(Agents)
-                updates[i] && k_shortest_path_rerouting!(OSMmap, Agents[i], speeds, k, T)
+            for a in Agents[updates]
+                k_shortest_path_rerouting!(OSMmap, a, speeds, k, T)
             end
-            #Increase simulation time
-            simtime += next_update
-            #Skip to next event
-            continue
+            simtime += next_update #Increase simulation time
+            debug && println(" Finished")
+            continue #Skip to next event
         end
         simtime += event_time
         vAgent = Agents[ID]
@@ -120,56 +115,71 @@ function simulation_ITS(OSMmap::MapData,
         update_agents_position!(Agents, event_time, speeds)
         #Process agent connected with event
         density_change = update_event_agent!(vAgent, simtime, densities, OSMmap.v)
-        if length(density_change) == 1 && sum(getfield.(Agents,:active)) % modulo ==0 println("Active agents $(sum(getfield.(Agents,:active)))") end
-        #Update speeds
-        update_weights!(speeds, density_change, max_densities, max_speeds)
-        #Update average density for smart cars
-        #update_smart_densities!(Agents, avg_smart_dens, steps)
+        active = sum(getfield.(Agents,:active))
+        if debug && length(density_change) == 1 && active % modulo == 0
+            println("Active agents: $active")
+        end
+        update_weights!(speeds, density_change, max_densities, max_speeds) #Update speeds
     end
     times = getfield.(Agents,:travel_time)
-    return steps, simtime, times, service_avblty, RSUs_utilization, no_updates
+    output_tuple = (Steps = steps,
+                    Simtime = simtime,
+                    ServiceAvailability = service_avblty,
+                    RSUsUtilization = RSUs_utilization,
+                    FailedUpdates = no_updates)
+    return output_tuple
 end
 
+"""
+`iterative_simulation_ITS` run simulation with iterative RSUs optimization.
 
+**Input parameters**
+* `OSMmap` : MapData type object with road network data
+* `inAgents` : set of agents created with generate_agents function
+* `range` : infrastructure transfer range
+* `throughput` : number of agents RSU can serve at once
+* `update_period` : period of weights updates
+* `threshold` : constraint for minimum service availability
+* `T` : distribution parameter in k-shortest path rerouting
+* `k` : number of fastest routes generated in rerouting function
+* `density_factor` : road length reserved for one vehicle
+* `debug` : debug messages switch
+"""
 function iterative_simulation_ITS(OSMmap::MapData,
                         inAgents::Vector{Agent},
-                        density_factor::Float64,
-                        stats::Dict{Array{Int64,1},Float64},
                         range::Float64,
                         throughput::Int64,
                         update_period::Int64,
-                        T::Float64,
-                        k::Int64,
-                        threshold::Float64,
+                        threshold::Float64 = 0.95,
+                        T::Float64 = 1.0,
+                        k::Int64 = 3,
+                        density_factor::Float64 = 5.0,
                         debug::Bool = true)
-
+    #Initialize working variables
     min_availability = 0.0
     iteration = 1
     #Find initial RSUs locations
-    RSU_Dict = optimize_RSU_location(OSMmap, range, throughput, "cover_all_nodes", inAgents)
-    RSU_ENU = Dict([OSMmap.nodes[k] => RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
-    failed_updates = Vector{Vector{ENU}}()
+    RSUs = optimize_RSU_location(OSMmap, inAgents, range, throughput)
     ITSOutput = Tuple{}()
     while min_availability < threshold
-        debug && println("Iteration nr $iteration started")
-        if iteration > 1
-            #Repeat optimization process
-            RSU_Dict = reoptimize_RSU_location!(OSMmap, RSU_Dict, failed_updates, range)
-            RSU_ENU = Dict([OSMmap.nodes[k] => RSU_Dict[k]*throughput for k in keys(RSU_Dict)])
-        end
-        #Run ITS simulation
-        ITSOutput = simulation_ITS(OSMmap, inAgents, density_factor, stats, range, RSU_ENU, update_period, T, k, debug)
-        service_avblty = ITSOutput[4]
-        failed_updates = ITSOutput[6]
-        min_availability = round(minimum(service_avblty),digits=3)
         if debug
-            println("Service availability:")
-            println(round.(service_avblty,digits=3))
-            println("Minimum service availability: $min_availability")
-            min_availability < threshold && println("Threshold not met, reiterating")
             println("#################################")
+            println("Iteration nr $iteration started")
+            println("#################################")
+        end
+        #Repeat optimization process if threshold not met
+        if iteration > 1 RSUs = reoptimize_RSU_location!(OSMmap, RSUs, ITSOutput.FailedUpdates, range) end
+        #Run ITS simulation
+        ITSOutput = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug)
+        service_avblty = round.(ITSOutput.ServiceAvailability, digits=3)
+        min_availability = minimum(service_avblty)
+        if debug
+            println("Service availability in updates:")
+            println(service_avblty)
+            println("Minimum service availability: $min_availability")
+            min_availability < threshold && println("Threshold not met, repeating optimization process")
         end
         iteration += 1
     end
-    return ITSOutput, RSU_Dict
+    return ITSOutput, RSUs
 end
