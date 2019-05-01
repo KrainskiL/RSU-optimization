@@ -12,7 +12,6 @@
 * `k` : number of fastest routes returned
 * `T` : control variable for probability distribution
 """
-
 function k_shortest_path_rerouting!(OSMmap::MapData,
                                     inAgent::Agent,
                                     speeds::AbstractMatrix,
@@ -41,16 +40,14 @@ end
 **Input parameters**
 * `Agents` : set of agents created with generate_agents function
 * `OSMmap` : MapData type object with road network data
-* `RSU_ENU` : dictionary with ENU coordinates of RSUs and available throughput
+* `RSUs` : vector with RSUs objects
 * `range` : range of RSUs transfer
 """
-
 function send_weights_update(Agents::Vector{Agent},
                             OSMmap::MapData,
-                            RSU_ENU::Dict{ENU,Int64},
+                            RSUs::Vector{RSU},
                             range::Float64)
-    #Creating working copy of RSU_ENU
-    tmpRSU_ENU = deepcopy(RSU_ENU)
+    tmpRSUs = deepcopy(RSUs) #Creating working copy of RSUs
     #Vector marking if agent receive update in given iteration
     update_received = falses(length(Agents))
     #Vector with ENU coordinates of agents not receiving an update
@@ -63,11 +60,11 @@ function send_weights_update(Agents::Vector{Agent},
             #Get agent coordinates
             a_coor = get_agent_coordinates(OSMmap, a)
             #If agent is in range of RSU with availabe transfer update is received
-            for (k, v) in tmpRSU_ENU
-                if v > 0 && OpenStreetMapX.distance(a_coor, k) <= range
+            for rsu in tmpRSUs
+                if rsu.total_thput > 0 && OpenStreetMapX.distance(a_coor, rsu.ENU) <= range
                     update_received[i] = true
                     #Decrease available throughput
-                    tmpRSU_ENU[k] -= 1
+                    rsu.total_thput -= 1
                     break
                 end
             end
@@ -77,6 +74,6 @@ function send_weights_update(Agents::Vector{Agent},
     #Service availability in current update
     updt_service_avblty = sum(update_received)/smart_active
     #Percentage RSUs utilization in current update
-    updt_RSUs_utilization = Dict([k=>(RSU_ENU[k]-tmpRSU_ENU[k])/RSU_ENU[k] for k in keys(RSU_ENU)])
+    updt_RSUs_utilization = Dict([RSUs[r].ENU => (RSUs[r].total_thput - tmpRSUs[r].total_thput)/RSUs[r].total_thput for r = 1:length(RSUs)])
     return update_received, no_update, updt_RSUs_utilization, updt_service_avblty
 end

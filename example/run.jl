@@ -1,9 +1,6 @@
 using OpenStreetMapX
 using RSUOptimization
-using StatsBase
-using LightGraphs
-using SparseArrays
-using Serialization
+
 #Creating MapData object
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
@@ -17,7 +14,7 @@ End = ((39.50,-119.80),(39.55,-119.76))
 α = 0.9
 N = 1000
 density_factor = 5.0
-range = 400.0
+range = 800.0
 throughput = 100
 updt_period = 200
 
@@ -26,23 +23,9 @@ Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α
 
 #Running base simulation - no V2I system
 @time BaseOutput = base_simulation(map_data, Agents, density_factor)
-avg_density = BaseOutput[4]
-open("test2.bin", "w") do f
-    serialize(f, avg_density)
-end
-avg1 = deserialize(open("test2.bin"))
-RSU_ENU, Agents, failedENU = deserialize(open("packet.bin"))
-#@time ITSOutput = simulation_ITS(map_data, Agents, density_factor, avg_density, range, throughput, updt_period, 1.0, 1)
-@time ITSOutput, RSU_Dict = iterative_simulation_ITS(map_data, Agents, density_factor, avg_density, range, throughput, updt_period, 1.0, 2, 0.95, true)
 
-ITSOutput
-RSU_Dict
-
-RSU_ENU = [map_data.nodes[k] for k in keys(RSU_Dict)]
-packet = (RSU_ENU, Agents ,ITSOutput)
-open("packet.bin", "w") do f
-    serialize(f, packet)
-end
+#ITS model with iterative RSU optimization
+@time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period)
 
 means, fail_reasons, out_of_range = ITS_quality_assess(getfield.(Agents, :smart),
                                         BaseOutput[3],
@@ -54,9 +37,6 @@ means, fail_reasons, out_of_range = ITS_quality_assess(getfield.(Agents, :smart)
                                         ITSOutput[7]);
 println(means)
 println(out_of_range)
-minimum(ITSOutput[5])
-mixed_out_of_range = hcat([sum(e) for e in fail_reasons],
-                            [sum(e)/length(e) for e in fail_reasons])
 
 using IJulia
 notebook()
