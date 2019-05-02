@@ -74,6 +74,6 @@ function send_weights_update(Agents::Vector{Agent},
     #Service availability in current update
     updt_service_avblty = sum(update_received)/smart_active
     #Percentage RSUs utilization in current update
-    updt_RSUs_utilization = Dict([RSUs[r].ENU => (RSUs[r].total_thput - tmpRSUs[r].total_thput)/RSUs[r].total_thput for r = 1:length(RSUs)])
+    updt_RSUs_utilization = Dict([RSUs[r].node => (RSUs[r].total_thput - tmpRSUs[r].total_thput)/RSUs[r].total_thput for r = 1:length(RSUs)])
     return update_received, no_update, updt_RSUs_utilization, updt_service_avblty
 end

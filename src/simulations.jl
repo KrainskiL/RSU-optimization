@@ -76,7 +76,7 @@ function simulation_ITS(OSMmap::MapData,
     if debug modulo = 10^(Int(round(Int, log10(length(Agents)))) - 1) end
 
     #Initialize statistic vectors
-    RSUs_utilization = Vector{Dict{ENU, Int64}}()
+    RSUs_utilization = Vector{Dict{Int64, Int64}}()
     no_updates = Vector{Vector{ENU}}()
     service_avblty = Vector{Float64}()
     #Loop until all agents are deactivated
@@ -122,6 +122,7 @@ function simulation_ITS(OSMmap::MapData,
         update_weights!(speeds, density_change, max_densities, max_speeds) #Update speeds
     end
     times = getfield.(Agents,:travel_time)
+    RSUs_utilization = Vector{Dict{Int64, Float64}}(RSUs_utilization)
     output_tuple = (Steps = steps,
                     Simtime = simtime,
                     ServiceAvailability = service_avblty,
@@ -156,28 +157,31 @@ function iterative_simulation_ITS(OSMmap::MapData,
                         density_factor::Float64 = 5.0,
                         debug::Bool = true)
     #Initialize working variables
-    min_availability = 0.0
     iteration = 1
     #Find initial RSUs locations
-    RSUs = optimize_RSU_location(OSMmap, inAgents, range, throughput)
+    RSUs = calculate_RSU_location(OSMmap, inAgents, range, throughput)
     ITSOutput = Tuple{}()
-    while min_availability < threshold
+    availability_failed = utilization_failed = true
+    while availability_failed || utilization_failed
         if debug
             println("#################################")
             println("Iteration nr $iteration started")
             println("#################################")
         end
-        #Repeat optimization process if threshold not met
-        if iteration > 1 RSUs = reoptimize_RSU_location!(OSMmap, RSUs, ITSOutput.FailedUpdates, range) end
         #Run ITS simulation
         ITSOutput = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug)
         service_avblty = round.(ITSOutput.ServiceAvailability, digits=3)
         min_availability = minimum(service_avblty)
+        #Check optimization criteria
+        utilization_failed = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, throughput)
+        availability_failed = min_availability < threshold
+        availability_failed && adjust_RSU_availability!(OSMmap, RSUs, ITSOutput.FailedUpdates, range)
         if debug
             println("Service availability in updates:")
-            println(service_avblty)
+            println(round.(ITSOutput.ServiceAvailability, digits=3))
             println("Minimum service availability: $min_availability")
-            min_availability < threshold && println("Threshold not met, repeating optimization process")
+            availability_failed && println("Availability too low, RSUs recalculated")
+            utilization_failed && println("Utilization too low, number of RSUs reduced")
         end
         iteration += 1
     end

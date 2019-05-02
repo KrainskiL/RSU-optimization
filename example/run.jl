@@ -1,6 +1,6 @@
 using OpenStreetMapX
 using RSUOptimization
-
+using StatsBase
 #Creating MapData object
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
@@ -42,6 +42,10 @@ using IJulia
 notebook()
 IJulia.installkernel("Julia nodeps", "--depwarn=no")
 
+
+failedENU = ITSOutput.FailedUpdates
+RSU_ENU = getfield.(RSUs,:ENU)
+
 using PyCall
 flm = pyimport("folium")
 matplotlib_cm = pyimport("matplotlib.cm")
@@ -58,7 +62,7 @@ for k=1:length(RSU_ENU)
       location=[locs[k].lat,locs[k].lon],
       popup=info,
       tooltip=info,
-      radius=300,
+      radius=range,
       color="blue",
       weight=0.5,
       fill=true,
@@ -113,11 +117,10 @@ end
 MAP_BOUNDS = [(map_data.bounds.min_y,map_data.bounds.min_x),(map_data.bounds.max_y,map_data.bounds.max_x)]
 flm.Rectangle(MAP_BOUNDS, color="black",weight=6).add_to(m)
 m.fit_bounds(MAP_BOUNDS)
-m.save("index.html")
+m.save("index2.html")
 m
 
-using IJulia
-notebook()
+
 
 """
 Ns = [10, 100, 500, 1000, 2000]
