@@ -3,7 +3,7 @@
 #####################################
 
 """
-`optimize_RSU_location` function returns dictionary with number of RSUs in given nodes.
+`calculate_RSU_location` function returns dictionary with number of RSUs in given nodes.
 
 **Input parameters**
 * `OSMmap` : MapData type from OpenStreetMapX package
@@ -11,7 +11,7 @@
 * `throughput` : number of agents RSU can serve at once
 * `div_coeff` : adjustment factor for calculating number of RSUs in node
 """
-function optimize_RSU_location(OSMmap::MapData,
+function calculate_RSU_location(OSMmap::MapData,
                                 inAgents::Vector{Agent},
                                 range::Float64,
                                 throughput::Int64,
@@ -39,7 +39,7 @@ function optimize_RSU_location(OSMmap::MapData,
 end
 
 """
-`reoptimize_RSU_location` function adjust RSUs location and number to meet service availability and utilization criteria
+`recalculate_RSU_location!` function adjust RSUs location and number to meet service availability and utilization criteria
 
 **Input parameters**
 * `OSMmap` : MapData type from OpenStreetMapX package
@@ -47,7 +47,7 @@ end
 * `RSUs` : vector with RSUs used in simulation
 * `failed_coor` : vector of vectors with agents coordinates missing an update
 """
-function reoptimize_RSU_location!(OSMmap::MapData,
+function recalculate_RSU_location!(OSMmap::MapData,
                                 RSUs::Vector{RSU},
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64)

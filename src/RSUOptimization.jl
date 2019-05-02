@@ -14,14 +14,14 @@ export Agent, RSU
 #generate_agents.jl
 export generate_agents, pick_random_node
 #optimization.jl
-export optimize_RSU_location, get_agent_coordinates, ITS_quality_assess
+export calculate_RSU_location, recalculate_RSU_location!, get_agent_coordinates, ITS_quality_assess
 #rerouting.jl
 export k_shortest_path_rerouting!, send_weights_update
 #simulations.jl
 export base_simulation, simulation_ITS, iterative_simulation_ITS
 #traffic_model.jl
 export get_max_densities, traffic_constants, init_traffic_variables, next_edge
-export update_weights!, update_event_agent!, update_smart_densities!, update_agents_position!
+export update_weights!, update_event_agent!, update_agents_position!
 
 #files
 include("types.jl")
