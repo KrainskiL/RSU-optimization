@@ -51,19 +51,20 @@ function recalculate_RSU_location!(OSMmap::MapData,
                                 RSUs::Vector{RSU},
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64)
-    flat_ = unique(collect(Iterators.flatten(failed_coor)))
-    RSU_ENU = getfield.(RSUs, :ENU)
+    RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
-    failed_throughput = Vector{ENU}()
-    failed_range = Vector{ENU}()
-    for enu in flat
+    failed_throughput = Vector{Vector{ENU}}()
+    failed_range = Vector{Vector{ENU}}()
+    for (i, failed_update) in enumerate(failed_coor)
+        for enu in failed_update
             if any([OpenStreetMapX.distance(RSU,enu) <= range for RSU in RSU_ENU])
-                push!(failed_throughput, enu)
+                push!(failed_throughput[i], enu)
             else
-                push!(failed_range, enu)
+                push!(failed_range[i], enu)
             end
+        end
     end
-    #Handle agents who failed due to being out of range
+    #Handle out of range failures
     dict_in_range = Dict{ENU,Array{Int64,1}}()
     for elem in failed_range
         dict_in_range[elem] = OpenStreetMapX.nodes_within_range(OSMmap.nodes, elem, range)
