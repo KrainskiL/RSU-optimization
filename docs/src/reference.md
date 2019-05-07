@@ -19,8 +19,12 @@ generate_agents
 RSU location optimization
 ----------------------
 ```@docs
+RSU
 get_agent_coordinates
-optimize_RSU_location
+calculate_RSU_location
+adjust_RSU_availability!
+adjust_RSU_utilization!
+gather_statistics
 ```
 
 Rerouting
@@ -44,6 +48,5 @@ traffic_constants
 init_traffic_variables
 next_edge
 update_event_agent!
-update_smart_densities!
 update_agents_position!
 ```

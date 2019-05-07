@@ -107,13 +107,11 @@ end
 * `curr_time` : current simulation time
 * `densities` : current traffic densitites matrix
 * `vertices_map` : mapping from nodes to vertices
-* `debug` : debug switch
 """
 function update_event_agent!(inAgent::Agent,
                             curr_time::Float64,
                             densities::Dict,
-                            vertices_map::Dict{Int,Int},
-                            debug::Bool = true)
+                            vertices_map::Dict{Int,Int})
     #Decrease density on previous edge
     p_edge = inAgent.edge
     densities[p_edge] -= 1

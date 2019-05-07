@@ -18,6 +18,8 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData,
     max_densities, max_speeds = traffic_constants(OSMmap, density_factor) #Traffic characteristic constants
     densities, speeds = init_traffic_variables(OSMmap, Agents) #Traffic characteristic variables
     update_weights!(speeds, densities, max_densities, max_speeds) #Initial speeds update
+    #route_tracking = Vector{Vector{Tuple}}(((0,0),0.0,0.0), 1000)
+    #route_tracking[3][end]-5
     #Initialize simulation variables
     simtime = 0.0
     steps = 0
@@ -29,6 +31,7 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData,
         event_time, ID = next_edge(Agents, speeds, OSMmap.w) #Calculate next event time
         simtime += event_time
         vAgent = Agents[ID]
+        #push!(route_tracking[ID], (vAgent.edge,simtime,))
         update_agents_position!(Agents, event_time, speeds) #Update all agents positions
         #Process agent connected with event
         density_change = update_event_agent!(vAgent, simtime, densities, OSMmap.v)

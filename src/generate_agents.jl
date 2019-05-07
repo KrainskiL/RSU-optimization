@@ -44,8 +44,8 @@ for initial routes travelled with maximal speed
 function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
     #Initialize empty working variables
     AgentsArr = Vector{Agent}()
-    times = Dict{Int,Float64}()
-    dists = Dict{Int,Float64}()
+    times = Vector{Float64}()
+    dists = Vector{Float64}()
     #Indicate smart agents
     N_int= Int(ceil(N*α))
     smart_ind = [trues(N_int); falses(N-N_int)]
@@ -63,8 +63,8 @@ function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vect
                 error("Route from starting to ending point can't be calculated.")
             end
         end
-        times[i] = time
-        dists[i] = dist
+        push!(times, time)
+        push!(dists, dist)
         #First edge in vertices notation
         firstEdge = [OSMmap.v[init_route[1]], OSMmap.v[init_route[2]]]
         NewAgent = Agent(smart_ind[i], start_node, end_node, init_route, 0.0, firstEdge, 0.0, true)
