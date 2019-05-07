@@ -3,7 +3,7 @@
 #####################################
 
 """
-`optimize_RSU_location` function returns dictionary with number of RSUs in given nodes.
+`calculate_RSU_location` function returns dictionary with number of RSUs in given nodes.
 
 **Input parameters**
 * `OSMmap` : MapData type from OpenStreetMapX package
@@ -11,7 +11,7 @@
 * `throughput` : number of agents RSU can serve at once
 * `div_coeff` : adjustment factor for calculating number of RSUs in node
 """
-function optimize_RSU_location(OSMmap::MapData,
+function calculate_RSU_location(OSMmap::MapData,
                                 inAgents::Vector{Agent},
                                 range::Float64,
                                 throughput::Int64,
@@ -39,59 +39,97 @@ function optimize_RSU_location(OSMmap::MapData,
 end
 
 """
-`reoptimize_RSU_location` function adjust RSUs location and number to meet service availability and utilization criteria
+`adjust_RSU_availability!` function adjust RSUs location and number to meet service availability and utilization criteria
 
 **Input parameters**
 * `OSMmap` : MapData type from OpenStreetMapX package
-* `range` : range of RSUs
 * `RSUs` : vector with RSUs used in simulation
 * `failed_coor` : vector of vectors with agents coordinates missing an update
+* `range` : range of RSUs
+* `throughput` : number of agents RSU can serve at once
 """
-function reoptimize_RSU_location!(OSMmap::MapData,
+function adjust_RSU_availability!(OSMmap::MapData,
                                 RSUs::Vector{RSU},
                                 failed_coor::Vector{Vector{ENU}},
-                                range::Float64)
-    flat_ = unique(collect(Iterators.flatten(failed_coor)))
-    RSU_ENU = getfield.(RSUs, :ENU)
+                                range::Float64,
+                                throughput::Int64)
+
+    RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
-    failed_throughput = Vector{ENU}()
-    failed_range = Vector{ENU}()
-    for enu in flat
+    failed_throughput = Vector{Vector{ENU}}()
+    failed_range = Vector{Vector{ENU}}()
+    for failed_update in failed_coor
+        tmp_range = Vector{ENU}()
+        tmp_thput = Vector{ENU}()
+        for enu in failed_update
             if any([OpenStreetMapX.distance(RSU,enu) <= range for RSU in RSU_ENU])
-                push!(failed_throughput, enu)
+                push!(tmp_thput, enu)
             else
-                push!(failed_range, enu)
+                push!(tmp_range, enu)
             end
+        end
+        push!(failed_throughput, tmp_thput)
+        push!(failed_range, tmp_range)
     end
-    #Handle agents who failed due to being out of range
-    dict_in_range = Dict{ENU,Array{Int64,1}}()
-    for elem in failed_range
-        dict_in_range[elem] = OpenStreetMapX.nodes_within_range(OSMmap.nodes, elem, range)
-        dict_in_range[elem] = [n for n in dict_in_range[elem] if haskey(OSMmap.v,n)]
-        isempty(dict_in_range[elem]) && delete!(dict_in_range, elem)
+    #############################
+    #Handle out of range failures
+    #############################
+    #For every failed coordinate find nodes within RSU range
+    failed_range_dicts = Vector{Dict{ENU,Array{Int64,1}}}()
+    for vec in failed_range
+        new_dict = filter!(n->!isempty(n[2]), Dict([enu => filter(n-> haskey(OSMmap.v, n), nodes_within_range(OSMmap.nodes, enu, range)) for enu in vec]))
+        push!(failed_range_dicts, new_dict)
     end
     #Repeat until failed points are in RSUs range
-    while !isempty(dict_in_range)
-        nodes_count = StatsBase.countmap(collect(Iterators.flatten(values(dict_in_range))))
+    while !all(isempty.(failed_range_dicts))
+        nodes_count = StatsBase.countmap(collect(Iterators.flatten(Iterators.flatten(values.(failed_range_dicts)))))
         nodeID = findmax(nodes_count)[2]
         #Put RSU in given node
-        RSU_Dict[nodeID] = 1
+        max_to_serve = maximum(count.(n-> n == nodeID, collect.(Iterators.flatten.(values.(failed_range_dicts)))))
+        N = ceil(max_to_serve/throughput)
+        new_RSU = RSU(nodeID, OSMmap.nodes[nodeID], N, N * throughput)
+        push!(RSUs, new_RSU)
         #Delete all points in new RSU range
-        for (k,v) in dict_in_range nodeID in v && delete!(dict_in_range, k) end
+        for dict in failed_range_dicts filter!(n-> !in(nodeID, n[2]), dict) end
     end
-
+    #############################
     #Handle agents who failed due to reached transfer limit
-    nodes_throughput = Vector{Int64}()
-    for enu in failed_throughput
-        distance_dict = Dict([n=>OpenStreetMapX.distance(enu,OSMmap.nodes[n]) for n in keys(RSU_Dict)])
-        nodeID = findmin(distance_dict)[2]
-        !(nodeID in nodes_throughput) && push!(nodes_throughput,nodeID)
+    #############################
+    failed_thput_vecs = Vector{Vector{RSU}}()
+    for vec in failed_throughput
+        push!(failed_thput_vecs, [findmin(Dict([r => OpenStreetMapX.distance(enu, r.ENU) for r in RSUs]))[2] for enu in vec])
     end
-    for n in nodes_throughput RSU_Dict[n] += 1 end
-    #Return updated dictionary
-    return RSU_Dict
+    for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
+        max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
+        N = ceil(max_to_serve/throughput)
+        rsu.count += N
+        rsu.total_thput += N * throughput
+    end
 end
 
+"""
+`adjust_RSU_utilization!` function
+
+**Input parameters**
+* `RSUs` : vector with RSUs used in simulation
+* `RSUs_util` : vector with RSUs percentage utilization in every weigths update
+* `throughput` : number of agents RSU can serve at once
+"""
+function adjust_RSU_utilization!(RSUs::Vector{RSU},
+                                RSUs_util::Vector{Dict{Int64, Float64}},
+                                throughput::Int64)
+    util_failed = false
+    for rsu in filter(r-> r.count !=1,RSUs)
+        max_util = maximum([dict[rsu.node] for dict in RSUs_util])
+        N = floor(Int, (1.0 - max_util)*rsu.total_thput/throughput)
+        if N != 0 && rsu.count - N > 0
+            util_failed = true
+            rsu.count -= N
+            rsu.total_thput -= N * throughput
+        end
+    end
+    return util_failed
+end
 """
 `get_agent_coordinates` return agents coordinates in ENU system
 
@@ -111,7 +149,7 @@ function get_agent_coordinates(OSMmap::MapData, inAgent::Agent)
 end
 
 """
-`ITS_quality_assess` return various measures describing ITS model quality
+`gather_statistics` return various measures describing ITS model quality
 
 **Input parameters**
 * `smart_ind` : vector with true flags for smart agents
@@ -119,45 +157,22 @@ end
 * `times_ITS` : agents travelling time in ITS scenario
 * `srvc_avblty` : vector with percentage service availability (from `simulation_ITS`)
 * `RSUs_util` : vector of dictionaries with RSUs utilization (from `simulation_ITS`)
-* `RSU_ENU` : vector of RSUs ENU coordinates
-* `range` : infrastructure transfer range
-* `failures` : array with ENU coordinates of smart agents missing an update (from `simulation_ITS`)
+* `RSUs` : vector of RSUs
 """
-function ITS_quality_assess(smart_ind::BitArray{1},
+function gather_statistics(smart_ind::BitArray{1},
                             times_base::Vector{Float64},
                             times_ITS::Vector{Float64},
                             srvc_avblty::Vector{Float64},
-                            RSUs_util,
-                            RSU_ENU::Vector{ENU},
-                            range::Float64,
-                            failures::Vector{Vector{ENU}})
+                            RSUs_util::Vector{Dict{Int64, Float64}},
+                            RSUs::Vector{RSU})
     perc_time_diff = (times_base - times_ITS)./times_base
-    #Means
-    mean_time_overall = round(mean(perc_time_diff), digits=3)
-    mean_time_smart = round(mean(perc_time_diff[smart_ind]), digits=3)
-    mean_time_not_smart = round(mean(perc_time_diff[.!smart_ind]), digits=3)
-    mean_srvc_avblty = round(mean(srvc_avblty), digits=3)
-    mean_RSUs_util = [mean(values(Dict)) for Dict in RSUs_util]
-    #Gather all results in one variable
-    mean_tuple = (overall_time = mean_time_overall,
-                    smart_time = mean_time_smart,
-                    other_time = mean_time_not_smart,
-                    service_availability = mean_srvc_avblty,
-                    RSUs_utilization = mean_RSUs_util)
-    #Categorize failures
-    failures_type = Vector{Vector{Bool}}()
-    for element in failures
-        failures_type_update = Vector{Bool}()
-        for e in element
-                if any([OpenStreetMapX.distance(RSU,e) <= range for RSU in RSU_ENU])
-                    push!(failures_type_update, false)
-                else
-                    push!(failures_type_update, true)
-                end
-        end
-        failures_type = [failures_type; [failures_type_update]]
-    end
-    mixed_out_of_range = hcat([sum(e) for e in failures_type],
-                                [sum(e)/length(e) for e in failures_type])
-    return mean_tuple, failures_type, mixed_out_of_range
+    statistics_tuple = (
+        overall_time = round(mean(perc_time_diff), digits=3),
+        smart_time = round(mean(perc_time_diff[smart_ind]), digits=3),
+        other_time = round(mean(perc_time_diff[.!smart_ind]), digits=3),
+        service_availability = round(minimum(srvc_avblty), digits=3),
+        RSUs_utilization = round(mean([mean(values(Dict)) for Dict in RSUs_util]), digits =3),
+        RSU_count = sum(getfield.(RSUs,:count))
+                        )
+    return statistics_tuple
 end

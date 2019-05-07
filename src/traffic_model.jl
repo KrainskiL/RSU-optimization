@@ -67,7 +67,7 @@ end
 * `optimization_stats` : switch for creating data used in RSUs optimization algorithm
 """
 function init_traffic_variables(OSMmap::MapData,
-                                      Agents::Vector{Agent})
+                                Agents::Vector{Agent})
     #Initital densities on edges
     initial_densities = StatsBase.countmap([a.edge for a in Agents])
     initial_speeds = OpenStreetMapX.get_velocities(OSMmap)
