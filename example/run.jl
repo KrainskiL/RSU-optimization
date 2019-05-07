@@ -1,6 +1,8 @@
 using OpenStreetMapX
 using RSUOptimization
-using StatsBase
+using Tables
+using CSV
+using DataFrames
 #Creating MapData object
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
@@ -14,29 +16,56 @@ End = ((39.50,-119.80),(39.55,-119.76))
 α = 0.9
 N = 1000
 density_factor = 5.0
-range = 800.0
-throughput = 100
+range = 1000.0
+throughput = 200
 updt_period = 200
 
 #Generating agents
 Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
-
 #Running base simulation - no V2I system
 @time BaseOutput = base_simulation(map_data, Agents, density_factor)
-
 #ITS model with iterative RSU optimization
-@time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period)
+@time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level=2)
+mean((BaseOutput.TravelTimes-ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
+using StatsBase
+"""
+Smart cars percentage analysis
+"""
+ResultFrame = DataFrame(alpha = Float64[],
+              TotalTimeReduction = Float64[],
+              SmartTimeReduction = Float64[],
+              NotSmartTimeReduction = Float64[],
+              MinAvailability = Float64[],
+              MeanRSUUtilization = Float64[],
+              RSUs = Int[])
 
-means, fail_reasons, out_of_range = ITS_quality_assess(getfield.(Agents, :smart),
-                                        BaseOutput[3],
-                                        ITSOutput[3],
-                                        ITSOutput[5],
-                                        ITSOutput[6],
-                                        RSU_ENU,
-                                        range,
-                                        ITSOutput[7]);
-println(means)
-println(out_of_range)
+αs = 1.0
+for element in αs
+  for i=1:5
+    #Generating agents
+    Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], element)
+    #Running base simulation - no V2I system
+    BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
+    #ITS model with iterative RSU optimization
+    ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level = 1)
+    println("$element : $i")
+    step_statistics = gather_statistics(getfield.(Agents,:smart),
+                                        BaseOutput.TravelTimes,
+                                        ITSOutput.TravelTimes,
+                                        ITSOutput.ServiceAvailability,
+                                        ITSOutput.RSUsUtilization,
+                                        RSUs)
+    println(step_statistics)
+    push!(ResultFrame, [element,
+                        step_statistics.overall_time,
+                        step_statistics.smart_time,
+                        step_statistics.other_time,
+                        step_statistics.service_availability,
+                        step_statistics.RSUs_utilization,
+                        step_statistics.RSU_count])
+  end
+end
+CSV.write("results.csv",ResultFrame)
 
 using IJulia
 notebook()
@@ -117,23 +146,5 @@ end
 MAP_BOUNDS = [(map_data.bounds.min_y,map_data.bounds.min_x),(map_data.bounds.max_y,map_data.bounds.max_x)]
 flm.Rectangle(MAP_BOUNDS, color="black",weight=6).add_to(m)
 m.fit_bounds(MAP_BOUNDS)
-m.save("index2.html")
+m.save("RSUmap.html")
 m
-
-
-
-"""
-Ns = [10, 100, 500, 1000, 2000]
-ResultsVec = Vector()
-for element in Ns
-    output = simulation(element, map_data)
-    push!(ResultsVec, output)
-    @info "simulation with $element agents done"
-end
-
-
-print(mean_and_std.([ResultsVec[i][3] for i in 1:length(ResultsVec)]))
-for i in 1:length(ResultsVec)
-    print(quantile(ResultsVec[i][3] ,[0.0, 0.25, 0.5, 0.75, 1.0]))
-end
-"""

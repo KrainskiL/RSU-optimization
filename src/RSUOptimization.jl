@@ -6,6 +6,7 @@ using StatsBase
 using SparseArrays
 using Base.Iterators
 using LightGraphs
+using DataFrames
 
 #types
 export Agent, RSU
@@ -14,7 +15,7 @@ export Agent, RSU
 #generate_agents.jl
 export generate_agents, pick_random_node
 #optimization.jl
-export calculate_RSU_location, adjust_RSU_availability!, adjust_RSU_utilization!, get_agent_coordinates, ITS_quality_assess
+export calculate_RSU_location, adjust_RSU_availability!, adjust_RSU_utilization!, get_agent_coordinates, gather_statistics
 #rerouting.jl
 export k_shortest_path_rerouting!, send_weights_update
 #simulations.jl
