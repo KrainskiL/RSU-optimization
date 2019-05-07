@@ -143,10 +143,10 @@ version = "0.4.0"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[OpenStreetMapX]]
-deps = ["DataStructures", "HTTP", "JSON", "LibExpat", "LightGraphs", "Random", "Serialization", "SparseArrays", "Statistics", "Test"]
-git-tree-sha1 = "bbc4e6619dd4e355aea0a2e458a06042b9717ea7"
+deps = ["DataStructures", "HTTP", "JSON", "LibExpat", "LightGraphs", "Serialization", "SparseArrays", "Statistics"]
+git-tree-sha1 = "e55632a8479b10874c240e7bfabdc6f34d2373fc"
 uuid = "86cd37e6-c0ff-550b-95fe-21d72c8d4fc9"
-version = "0.1.9"
+version = "0.1.10"
 
 [[OrderedCollections]]
 deps = ["Random", "Serialization", "Test"]
@@ -228,10 +228,10 @@ deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[StatsBase]]
-deps = ["DataStructures", "DelimitedFiles", "LinearAlgebra", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "Test"]
-git-tree-sha1 = "435707791dc85a67d98d671c1c3fcf1b20b00f94"
+deps = ["DataStructures", "LinearAlgebra", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics"]
+git-tree-sha1 = "8a0f4b09c7426478ab677245ab2b0b68552143c7"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.29.0"
+version = "0.30.0"
 
 [[TableTraits]]
 deps = ["IteratorInterfaceExtensions"]
