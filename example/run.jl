@@ -24,13 +24,18 @@ k = 3
 #Generating agents
 Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
 #Running base simulation - no V2I system
-@time BaseOutput = base_simulation(map_data, Agents)
+@time BaseOutput, tracking = base_simulation(map_data, Agents)
 #ITS model with iterative RSU optimization
 @time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level=2)
 
 RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
-ITSOutput = simulation_ITS(map_data,Agents,range,RSUs,300,100.0,1,density_factor,2)
+ITSOutput, trackingITS = simulation_ITS(map_data,Agents,range,RSUs,300,100.0,1,density_factor,2)
 
+DataFrame(tracking[261])
+trackingITS[261]
+
+
+findmin((BaseOutput.TravelTimes - ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
 (sum(BaseOutput.TravelTimes)-sum(ITSOutput.TravelTimes))/sum(BaseOutput.TravelTimes)
 using StatsBase
 """
