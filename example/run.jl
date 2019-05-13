@@ -13,25 +13,35 @@ Start = ((39.50,-119.70),(39.55,-119.74))
 End = ((39.50,-119.80),(39.55,-119.76))
 
 #Proportion of smart agents
-α = 0.9
-N = 1000
+α = 1.0
+N = 500
 density_factor = 5.0
 range = 1000.0
 throughput = 200
 updt_period = 200
-
+T = 1.0
+k = 3
 #Generating agents
 Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
 #Running base simulation - no V2I system
-@time BaseOutput = base_simulation(map_data, Agents, density_factor)
+@time BaseOutput, tracking = base_simulation(map_data, Agents)
 #ITS model with iterative RSU optimization
 @time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level=2)
-mean((BaseOutput.TravelTimes-ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
+
+RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
+ITSOutput, trackingITS = simulation_ITS(map_data,Agents,range,RSUs,300,100.0,1,density_factor,2)
+
+DataFrame(tracking[261])
+trackingITS[261]
+
+
+findmin((BaseOutput.TravelTimes - ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
+(sum(BaseOutput.TravelTimes)-sum(ITSOutput.TravelTimes))/sum(BaseOutput.TravelTimes)
 using StatsBase
 """
 Smart cars percentage analysis
 """
-ResultFrame = DataFrame(alpha = Float64[],
+ResultFrame = DataFrame(T = Float64[],
               TotalTimeReduction = Float64[],
               SmartTimeReduction = Float64[],
               NotSmartTimeReduction = Float64[],
@@ -39,16 +49,16 @@ ResultFrame = DataFrame(alpha = Float64[],
               MeanRSUUtilization = Float64[],
               RSUs = Int[])
 
-αs = 1.0
-for element in αs
+Ts = [0.01, 0.1, 0.5, 1, 5, 10]
+for element in Ts
   for i=1:5
+    println("$element : $i")
     #Generating agents
-    Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], element)
+    Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
     #Running base simulation - no V2I system
     BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
     #ITS model with iterative RSU optimization
-    ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level = 1)
-    println("$element : $i")
+    ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, T = element, debug_level = 1)
     step_statistics = gather_statistics(getfield.(Agents,:smart),
                                         BaseOutput.TravelTimes,
                                         ITSOutput.TravelTimes,
@@ -65,7 +75,7 @@ for element in αs
                         step_statistics.RSU_count])
   end
 end
-CSV.write("results.csv",ResultFrame)
+CSV.write("T_results.csv",ResultFrame)
 
 using IJulia
 notebook()
