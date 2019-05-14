@@ -4,7 +4,7 @@ using RSUOptimization
 using Random
 using SparseArrays
 
-test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
+test_map = OpenStreetMapX.get_map_data("C:/RSUOptimization.jl/example/reno_east3.osm", use_cache = false)
 Rect1 = ((39.50,-119.70),(39.55,-119.74))
 Rect2 = ((39.50,-119.80),(39.55,-119.76))
 AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)
@@ -45,14 +45,16 @@ end
 @testset "simulations" begin
 
 newAgents = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)[1]
-output = base_simulation(test_map, newAgents, debug_level = 0)
+output, tracking = base_simulation(test_map, newAgents, debug_level = 0)
 @test length(output) == 3
+@test typeof(tracking) == Dict{Int64,Array{Tuple,1}}
 @test typeof(output) == NamedTuple{(:Steps, :Simtime, :TravelTimes),Tuple{Int64,Float64,Array{Float64,1}}}
 
 RSUs = calculate_RSU_location(test_map, newAgents, rangeRSU, throughput)
-ITSOutput = simulation_ITS(test_map, newAgents, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
+ITSOutput, ITStracking = simulation_ITS(test_map, newAgents, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
 
 @test length(ITSOutput) == 6
+@test typeof(ITStracking) == Dict{Int64,Array{Tuple,1}}
 @test typeof(ITSOutput) == NamedTuple{(:Steps, :Simtime, :TravelTimes, :ServiceAvailability, :RSUsUtilization, :FailedUpdates),Tuple{Int64,Float64,Array{Float64,1},Array{Float64,1},Array{Dict{Int64,Float64},1},Array{Array{ENU,1},1}}}
 
 iterITSOutput, NewRSUs = iterative_simulation_ITS(test_map, newAgents, rangeRSU, throughput, 50, threshold = 0.60, debug_level = 0)
@@ -112,7 +114,7 @@ RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput)
 @test rand(RSUs).node in keys(test_map.v)
 @test typeof(RSUs[1]) == RSU
 
-ITSOutput = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
+ITSOutput, ITStracking = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
 oldRSUs = deepcopy(RSUs)
 adjust_RSU_availability!(test_map, RSUs, ITSOutput.FailedUpdates, rangeRSU, throughput)
 @test oldRSUs != RSUs
@@ -122,7 +124,7 @@ failed_utilization = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, th
 
 @test typeof(get_agent_coordinates(test_map, AgentsSet[1])) == ENU
 
-output = base_simulation(test_map, AgentsSet, debug_level = 0)
+output, tracking = base_simulation(test_map, AgentsSet, debug_level = 0)
 stats = gather_statistics(getfield.(AgentsSet,:smart),
                     output.TravelTimes,
                     ITSOutput.TravelTimes,

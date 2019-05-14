@@ -165,11 +165,13 @@ function gather_statistics(smart_ind::BitArray{1},
                             srvc_avblty::Vector{Float64},
                             RSUs_util::Vector{Dict{Int64, Float64}},
                             RSUs::Vector{RSU})
-    perc_time_diff = (times_base - times_ITS)./times_base
+    overall_time = (sum(times_base) - sum(times_ITS))/sum(times_base)
+    smart_time = (sum(times_base[smart_ind]) - sum(times_ITS[smart_ind]))/sum(times_base[smart_ind])
+    other_time = (sum(times_base[.!smart_ind]) - sum(times_ITS[.!smart_ind]))/sum(times_base[.!smart_ind])
     statistics_tuple = (
-        overall_time = round(mean(perc_time_diff), digits=3),
-        smart_time = round(mean(perc_time_diff[smart_ind]), digits=3),
-        other_time = round(mean(perc_time_diff[.!smart_ind]), digits=3),
+        overall_time = round(overall_time, digits=3),
+        smart_time = round(smart_time, digits=3),
+        other_time = round(other_time, digits=3),
         service_availability = round(minimum(srvc_avblty), digits=3),
         RSUs_utilization = round(mean([mean(values(Dict)) for Dict in RSUs_util]), digits =3),
         RSU_count = sum(getfield.(RSUs,:count))

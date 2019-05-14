@@ -52,7 +52,7 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData,
         Simtime = simtime,
         TravelTimes = times
                     )
-    return output_tuple
+    return output_tuple, route_tracking
 end
 
 """
@@ -153,7 +153,7 @@ function simulation_ITS(OSMmap::MapData,
                     ServiceAvailability = service_avblty,
                     RSUsUtilization = RSUs_utilization,
                     FailedUpdates = no_updates)
-    return output_tuple
+    return output_tuple, route_tracking
 end
 
 """
@@ -199,7 +199,7 @@ function iterative_simulation_ITS(OSMmap::MapData,
             println("#################################")
         end
         #Run ITS simulation
-        ITSOutput = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug_level)
+        ITSOutput, ITStracking = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug_level)
         service_avblty = round.(ITSOutput.ServiceAvailability, digits=3)
         min_availability = minimum(service_avblty)
         RSU_Count = sum(getfield.(RSUs, :count))

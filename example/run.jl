@@ -6,7 +6,7 @@ using DataFrames
 #Creating MapData object
 mapfile = "reno_east3.osm"
 datapath = "C:/RSUOptimization.jl/example";
-map_data = OpenStreetMapX.get_map_data(datapath, mapfile,use_cache=false; road_levels= Set(1:4));
+map_data = OpenStreetMapX.get_map_data(datapath, mapfile,use_cache=false; road_levels = Set(1:5));
 
 #Defining starting and ending area
 Start = ((39.50,-119.70),(39.55,-119.74))
@@ -14,12 +14,12 @@ End = ((39.50,-119.80),(39.55,-119.76))
 
 #Proportion of smart agents
 α = 1.0
-N = 500
+N = 1000
 density_factor = 5.0
 range = 1000.0
 throughput = 200
-updt_period = 200
-T = 1.0
+updt_period = 150
+T = 5.0
 k = 3
 #Generating agents
 Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
@@ -29,15 +29,20 @@ Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α
 @time ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, debug_level=2)
 
 RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
-ITSOutput, trackingITS = simulation_ITS(map_data,Agents,range,RSUs,300,100.0,1,density_factor,2)
+@time ITSOutput, trackingITS = simulation_ITS(map_data,Agents,range,RSUs,150,T,k,density_factor,2)
 
-DataFrame(tracking[261])
-trackingITS[261]
+typeof(trackingITS)
+for i in 1:1000
+  Agents[i].smart = true
+end
+println(tracking[295])
+println(trackingITS[295])
 
-
-findmin((BaseOutput.TravelTimes - ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
+map_data.w[389,390]
+mean((BaseOutput.TravelTimes - ITSOutput.TravelTimes)./BaseOutput.TravelTimes)
 (sum(BaseOutput.TravelTimes)-sum(ITSOutput.TravelTimes))/sum(BaseOutput.TravelTimes)
 using StatsBase
+
 """
 Smart cars percentage analysis
 """
@@ -49,16 +54,18 @@ ResultFrame = DataFrame(T = Float64[],
               MeanRSUUtilization = Float64[],
               RSUs = Int[])
 
-Ts = [0.01, 0.1, 0.5, 1, 5, 10]
-for element in Ts
+αs = 0.1:0.1:1
+for element in αs
   for i=1:5
     println("$element : $i")
     #Generating agents
-    Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], α)
+    Agents, init_times, init_dists = generate_agents(map_data, N, [Start], [End], element)
     #Running base simulation - no V2I system
-    BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
+    BaseOutput, tracking = base_simulation(map_data, Agents, debug_level = 0)
     #ITS model with iterative RSU optimization
-    ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, T = element, debug_level = 1)
+    #ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, T = element, debug_level = 1)
+    RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
+    ITSOutput, trackingITS = simulation_ITS(map_data,Agents,range,RSUs,updt_period,T,k,density_factor,1)
     step_statistics = gather_statistics(getfield.(Agents,:smart),
                                         BaseOutput.TravelTimes,
                                         ITSOutput.TravelTimes,
@@ -75,7 +82,31 @@ for element in Ts
                         step_statistics.RSU_count])
   end
 end
-CSV.write("T_results.csv",ResultFrame)
+CSV.write("results2.csv",ResultFrame)
+
+speeds= OpenStreetMapX.get_velocities(map_data)
+using LightGraphs
+k_routes = LightGraphs.yen_k_shortest_paths(map_data.g, map_data.v[Agents[1].route[30]],
+                                            map_data.v[Agents[1].end_node], map_data.w./speeds, k)
+T=1.0
+#Normalize k-paths travelling time
+norm_time = k_routes.dists/maximum(k_routes.dists)
+#Calculate probability of being picked for every route
+exp_ntime = exp.(-norm_time/T)
+probs = exp_ntime/sum(exp_ntime)
+#Assign new route
+new_path = sample([1,2,3], StatsBase.weights([1,2,3]))
+
+
+
+
+
+
+
+
+
+
+
 
 using IJulia
 notebook()
