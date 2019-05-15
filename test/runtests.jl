@@ -4,7 +4,7 @@ using RSUOptimization
 using Random
 using SparseArrays
 
-test_map = OpenStreetMapX.get_map_data("C:/RSUOptimization.jl/example/reno_east3.osm", use_cache = false)
+test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
 Rect1 = ((39.50,-119.70),(39.55,-119.74))
 Rect2 = ((39.50,-119.80),(39.55,-119.76))
 AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)
