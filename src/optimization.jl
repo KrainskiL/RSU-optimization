@@ -53,7 +53,7 @@ function adjust_RSU_availability!(OSMmap::MapData,
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64,
                                 throughput::Int64)
-
+    checkRSUs = deepcopy(RSUs)
     RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
     failed_throughput = Vector{Vector{ENU}}()
@@ -99,12 +99,16 @@ function adjust_RSU_availability!(OSMmap::MapData,
     for vec in failed_throughput
         push!(failed_thput_vecs, [findmin(Dict([r => OpenStreetMapX.distance(enu, r.ENU) for r in RSUs]))[2] for enu in vec])
     end
-    for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
-        max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
-        N = ceil(max_to_serve/throughput)
-        rsu.count += N
-        rsu.total_thput += N * throughput
+    if !isempty(failed_thput_vecs)
+        for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
+            max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
+            N = ceil(max_to_serve/throughput)
+            rsu.count += N
+            rsu.total_thput += N * throughput
+        end
     end
+    #Check if RSUs parameters were changed
+    if checkRSUs == RSUs error("Availability criterion can't be met. Stopping simulation.") end
 end
 
 """
@@ -165,11 +169,13 @@ function gather_statistics(smart_ind::BitArray{1},
                             srvc_avblty::Vector{Float64},
                             RSUs_util::Vector{Dict{Int64, Float64}},
                             RSUs::Vector{RSU})
-    perc_time_diff = (times_base - times_ITS)./times_base
+    overall_time = (sum(times_base) - sum(times_ITS))/sum(times_base)
+    smart_time = (sum(times_base[smart_ind]) - sum(times_ITS[smart_ind]))/sum(times_base[smart_ind])
+    other_time = (sum(times_base[.!smart_ind]) - sum(times_ITS[.!smart_ind]))/sum(times_base[.!smart_ind])
     statistics_tuple = (
-        overall_time = round(mean(perc_time_diff), digits=3),
-        smart_time = round(mean(perc_time_diff[smart_ind]), digits=3),
-        other_time = round(mean(perc_time_diff[.!smart_ind]), digits=3),
+        overall_time = round(overall_time, digits=3),
+        smart_time = round(smart_time, digits=3),
+        other_time = round(other_time, digits=3),
         service_availability = round(minimum(srvc_avblty), digits=3),
         RSUs_utilization = round(mean([mean(values(Dict)) for Dict in RSUs_util]), digits =3),
         RSU_count = sum(getfield.(RSUs,:count))

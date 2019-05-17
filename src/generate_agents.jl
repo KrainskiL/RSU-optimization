@@ -1,22 +1,20 @@
 ##################################
 ## Setting up agents properties ##
 ##################################
-Rect = Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
 """
 `pick_random_node` function is used to set starting and ending node of agents.
 Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 
 **Input parameters**
 * `OSMmap` : mapData type object with road network data
-* `rects` : vector of tuples with two Latitude-Longitude point interpreted as a set of rectangle areas
-
+* `rects` : vector of Rect types interpreted as a set of rectangle areas
 """
-function pick_random_node(OSMmap::OpenStreetMapX.MapData, rects::Vector{Rect})
+function pick_random_node(OSMmap::OpenStreetMapX.MapData,
+                          rects::Vector{Rect})
     nodes_in_rects = Vector{Int}()
     for rect in rects
-        frect = collect(Iterators.flatten(rect))
-        p1 = ENU(LLA(frect[1], frect[2]), OSMmap.bounds)
-        p2 = ENU(LLA(frect[3], frect[4]), OSMmap.bounds)
+        p1 = ENU(LLA(rect.p1[1], rect.p1[2]), OSMmap.bounds)
+        p2 = ENU(LLA(rect.p2[1], rect.p2[2]), OSMmap.bounds)
         exE = extrema([p1.east, p2.east])
         exN = extrema([p1.north, p2.north])
         for key in keys(OSMmap.v)
@@ -41,7 +39,11 @@ for initial routes travelled with maximal speed
 * `EndArea` : vector of points corresponding to area from which agents randomly pick ending point
 * `α` : percentage of smart agentss
 """
-function generate_agents(OSMmap::OpenStreetMapX.MapData, N::Int, StartArea::Vector{Rect}, EndArea::Vector{Rect}, α::Float64)
+function generate_agents(OSMmap::OpenStreetMapX.MapData,
+                        N::Int,
+                        StartArea::Vector{Rect},
+                        EndArea::Vector{Rect},
+                        α::Float64)
     #Initialize empty working variables
     AgentsArr = Vector{Agent}()
     times = Vector{Float64}()

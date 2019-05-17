@@ -9,7 +9,7 @@ using LightGraphs
 using DataFrames
 
 #types
-export Agent, RSU
+export Rect, Agent, RSU
 
 #functions
 #generate_agents.jl
@@ -31,6 +31,5 @@ include("optimization.jl")
 include("rerouting.jl")
 include("simulations.jl")
 include("traffic_model.jl")
-
 
 end

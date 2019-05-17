@@ -5,9 +5,9 @@ using Random
 using SparseArrays
 
 test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
-Rect1 = ((39.50,-119.70),(39.55,-119.74))
-Rect2 = ((39.50,-119.80),(39.55,-119.76))
-AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)
+Rect1 = [Rect((39.50,-119.70),(39.55,-119.74))]
+Rect2 = [Rect((39.50,-119.80),(39.55,-119.76))]
+AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,Rect1,Rect2, 0.5)
 
 rangeRSU = 300.0
 throughput = 10
@@ -18,9 +18,9 @@ throughput = 10
 Random.seed!(0);
 @test rand(Int) == -4635026124992869592
 
-@test in(pick_random_node(test_map, [Rect1]), keys(test_map.nodes))
+@test in(pick_random_node(test_map, Rect1), keys(test_map.nodes))
 
-@test in(pick_random_node(test_map, [Rect1, Rect2]), keys(test_map.nodes))
+@test in(pick_random_node(test_map, [Rect1[1], Rect2[1]]), keys(test_map.nodes))
 
 @test all([in(x, keys(test_map.nodes)) for x in getfield.(AgentsSet,:start_node)])
 @test AgentsTime[5] == OpenStreetMapX.fastest_route(test_map, AgentsSet[5].start_node, AgentsSet[5].end_node)[3]
@@ -44,7 +44,7 @@ end
 #simulations.jl
 @testset "simulations" begin
 
-newAgents = generate_agents(test_map,10,[Rect1],[Rect2], 0.5)[1]
+newAgents = generate_agents(test_map,10,Rect1,Rect2, 0.5)[1]
 output = base_simulation(test_map, newAgents, debug_level = 0)
 @test length(output) == 3
 @test typeof(output) == NamedTuple{(:Steps, :Simtime, :TravelTimes),Tuple{Int64,Float64,Array{Float64,1}}}
