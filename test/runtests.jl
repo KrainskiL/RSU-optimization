@@ -4,7 +4,7 @@ using RSUOptimization
 using Random
 using SparseArrays
 
-test_map = OpenStreetMapX.get_map_data("C:/RSUOptimization.jl/example/reno_east3.osm", use_cache = false)
+test_map = OpenStreetMapX.get_map_data("reno_east3.osm", use_cache = false)
 Rect1 = [Rect((39.50,-119.70),(39.55,-119.74))]
 Rect2 = [Rect((39.50,-119.80),(39.55,-119.76))]
 AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,Rect1,Rect2, 0.5)
@@ -20,7 +20,7 @@ Random.seed!(0);
 
 @test in(pick_random_node(test_map, Rect1), keys(test_map.nodes))
 
-@test in(pick_random_node(test_map, Rect1, Rect2), keys(test_map.nodes))
+@test in(pick_random_node(test_map, [Rect1[1], Rect2[1]]), keys(test_map.nodes))
 
 @test all([in(x, keys(test_map.nodes)) for x in getfield.(AgentsSet,:start_node)])
 @test AgentsTime[5] == OpenStreetMapX.fastest_route(test_map, AgentsSet[5].start_node, AgentsSet[5].end_node)[3]
@@ -112,7 +112,7 @@ RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput)
 @test rand(RSUs).node in keys(test_map.v)
 @test typeof(RSUs[1]) == RSU
 
-ITSOutput, ITStracking = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
+ITSOutput = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
 oldRSUs = deepcopy(RSUs)
 adjust_RSU_availability!(test_map, RSUs, ITSOutput.FailedUpdates, rangeRSU, throughput)
 @test oldRSUs != RSUs
@@ -122,7 +122,7 @@ failed_utilization = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, th
 
 @test typeof(get_agent_coordinates(test_map, AgentsSet[1])) == ENU
 
-output, tracking = base_simulation(test_map, AgentsSet, debug_level = 0)
+output = base_simulation(test_map, AgentsSet, debug_level = 0)
 stats = gather_statistics(getfield.(AgentsSet,:smart),
                     output.TravelTimes,
                     ITSOutput.TravelTimes,

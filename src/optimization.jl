@@ -53,7 +53,7 @@ function adjust_RSU_availability!(OSMmap::MapData,
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64,
                                 throughput::Int64)
-
+    checkRSUs = deepcopy(RSUs)
     RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
     failed_throughput = Vector{Vector{ENU}}()
@@ -99,12 +99,16 @@ function adjust_RSU_availability!(OSMmap::MapData,
     for vec in failed_throughput
         push!(failed_thput_vecs, [findmin(Dict([r => OpenStreetMapX.distance(enu, r.ENU) for r in RSUs]))[2] for enu in vec])
     end
-    for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
-        max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
-        N = ceil(max_to_serve/throughput)
-        rsu.count += N
-        rsu.total_thput += N * throughput
+    if !isempty(failed_thput_vecs)
+        for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
+            max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
+            N = ceil(max_to_serve/throughput)
+            rsu.count += N
+            rsu.total_thput += N * throughput
+        end
     end
+    #Check if RSUs parameters were changed
+    if checkRSUs == RSUs error("Availability criterion can't be met. Stopping simulation.") end
 end
 
 """
