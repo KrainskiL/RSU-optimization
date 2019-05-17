@@ -9,6 +9,7 @@ function visualize_RSUs_and_failures(OSMmap::MapData,
                                     Agents::Vector{Agent},
                                     failedENU::Array{Array{ENU,1},1},
                                     RSUs::Array{RSU,1},
+                                    range::Float64,
                                     outfile::String)
     RSU_ENU = getfield.(RSUs,:ENU)
     flm = pyimport("folium")
@@ -79,16 +80,14 @@ function visualize_RSUs_and_failures(OSMmap::MapData,
        ).add_to(m)
     end
 
-    #Add bounds and
-    MAP_BOUNDS = [(map_data.bounds.min_y,map_data.bounds.min_x),(map_data.bounds.max_y,map_data.bounds.max_x)]
-    START = [StartWaw[1],StartWaw[2]]
-    END = [EndWaw[1], EndWaw[2]]
+    #Add bounds and starting/ending area
+    MAP_BOUNDS = [(OSMmap.bounds.min_y,OSMmap.bounds.min_x),(OSMmap.bounds.max_y,OSMmap.bounds.max_x)]
     flm.Rectangle(MAP_BOUNDS, color="black",weight=6).add_to(m)
     for r in Start
-      flm.Rectangle(r, color="blue",weight=2).add_to(m)
+      flm.Rectangle([r.p1,r.p2], color="blue",weight=2).add_to(m)
     end
     for r in End
-      flm.Rectangle(r, color="red",weight=2).add_to(m)
+      flm.Rectangle([r.p1,r.p2], color="red",weight=2).add_to(m)
     end
     m.fit_bounds(MAP_BOUNDS)
     m.save(outfile)

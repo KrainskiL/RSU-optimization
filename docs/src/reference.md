@@ -11,6 +11,7 @@ end
 Agent generation
 ----------------------
 ```@docs
+Rect
 Agent
 pick_random_node
 generate_agents

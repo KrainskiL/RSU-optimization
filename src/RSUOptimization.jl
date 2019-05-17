@@ -9,7 +9,7 @@ using LightGraphs
 using DataFrames
 
 #types
-export Agent, RSU
+export Rect, Agent, RSU
 
 #functions
 #generate_agents.jl
@@ -23,6 +23,8 @@ export base_simulation, simulation_ITS, iterative_simulation_ITS
 #traffic_model.jl
 export get_max_densities, traffic_constants, init_traffic_variables, next_edge
 export update_weights!, update_event_agent!, update_agents_position!
+#visualization.jl
+export visualize_RSUs_and_failures
 
 #files
 include("types.jl")
@@ -31,6 +33,7 @@ include("optimization.jl")
 include("rerouting.jl")
 include("simulations.jl")
 include("traffic_model.jl")
+include("visualization.jl")
 
 
 end
