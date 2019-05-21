@@ -15,6 +15,7 @@ function calculate_RSU_location(OSMmap::MapData,
                                 inAgents::Vector{Agent},
                                 range::Float64,
                                 throughput::Int64,
+                                V2V_throughput::Int64;
                                 div_coeff::Float64 = 0.1)
     RSUs = Vector{RSU}()
     #Count how many times each node was passed by smart agents in base simulation
@@ -52,7 +53,8 @@ function adjust_RSU_availability!(OSMmap::MapData,
                                 RSUs::Vector{RSU},
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64,
-                                throughput::Int64)
+                                throughput::Int64,
+                                V2V_throughput::Int64)
     checkRSUs = deepcopy(RSUs)
     RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
@@ -86,7 +88,7 @@ function adjust_RSU_availability!(OSMmap::MapData,
         nodeID = findmax(nodes_count)[2]
         #Put RSU in given node
         max_to_serve = maximum(count.(n-> n == nodeID, collect.(Iterators.flatten.(values.(failed_range_dicts)))))
-        N = ceil(max_to_serve/throughput)
+        N = ceil(max_to_serve/(throughput*V2V_throughput))
         new_RSU = RSU(nodeID, OSMmap.nodes[nodeID], N, N * throughput)
         push!(RSUs, new_RSU)
         #Delete all points in new RSU range
@@ -99,10 +101,10 @@ function adjust_RSU_availability!(OSMmap::MapData,
     for vec in failed_throughput
         push!(failed_thput_vecs, [findmin(Dict([r => OpenStreetMapX.distance(enu, r.ENU) for r in RSUs]))[2] for enu in vec])
     end
-    if !isempty(failed_thput_vecs)
-        for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
+    for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
+        if typeof(rsu) == RSU
             max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
-            N = ceil(max_to_serve/throughput)
+            N = ceil(max_to_serve/(throughput*V2V_throughput))
             rsu.count += N
             rsu.total_thput += N * throughput
         end

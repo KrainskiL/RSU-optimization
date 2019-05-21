@@ -2,7 +2,6 @@ using OpenStreetMapX
 using RSUOptimization
 using CSV
 using DataFrames
-using Distributed
 
 #Creating MapData object
 mapfile = "reno_east3.osm"
@@ -23,6 +22,9 @@ throughput = 100
 updt_period = 200
 T = 0.1
 k = 4
+V2V = false
+V2V_range = 0.0
+V2V_throughput = 1
 
 """
 Parameters analysis
@@ -39,6 +41,9 @@ ResultFrame = DataFrame(Map = String[],
               update_period = Int64[],
               T = Float64[],
               k = Int64[],
+              V2V = Bool[],
+              V2V_range = Float64[],
+              V2V_throughput = Int64[],
               TotalTimeReduction = Float64[],
               SmartTimeReduction = Float64[],
               NotSmartTimeReduction = Float64[],
@@ -69,6 +74,7 @@ for element in αs
                           string((Start[1].p1,Start[1].p2)), string((End[1].p1,End[1].p2)),
                           element, N, density_factor,
                           range, throughput, updt_period, T, k,
+                          V2V, V2V_range, V2V_throughput,
                           step_statistics.overall_time,
                           step_statistics.smart_time,
                           step_statistics.other_time,
@@ -78,5 +84,3 @@ for element in αs
       end
 end
 CSV.write("reno_east3_Full_alfa_part2.csv", ResultFrame)
-
-unique(collect(Iterators.flatten(keys.(Vector{Vector{RSU}}()))))
