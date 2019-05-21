@@ -18,10 +18,6 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData,
     max_densities, max_speeds = traffic_constants(OSMmap, density_factor) #Traffic characteristic constants
     densities, speeds = init_traffic_variables(OSMmap, Agents) #Traffic characteristic variables
     update_weights!(speeds, densities, max_densities, max_speeds) #Initial speeds update
-    # route_tracking = Dict{Int64,Vector{Tuple}}()
-    # for (i,a) in enumerate(Agents)
-    #     route_tracking[i] = [(a.edge,0.0,0.0,0.0,0.0)]
-    # end
     #Initialize simulation variables
     simtime = 0.0
     steps = 0
@@ -33,10 +29,6 @@ function base_simulation(OSMmap::OpenStreetMapX.MapData,
         event_time, ID = next_edge(Agents, speeds, OSMmap.w) #Calculate next event time
         simtime += event_time
         vAgent = Agents[ID]
-        # edge_time = simtime - route_tracking[ID][end][2]
-        # edge_len = OSMmap.w[vAgent.edge[1],vAgent.edge[2]]
-        # edge_speed = speeds[vAgent.edge[1],vAgent.edge[2]]
-        # route_tracking[ID] = [route_tracking[ID];(vAgent.edge,simtime,edge_time,edge_len/edge_time,edge_speed)]
         update_agents_position!(Agents, event_time, speeds) #Update all agents positions
         #Process agent connected with event
         density_change = update_event_agent!(vAgent, simtime, densities, OSMmap.v)
@@ -71,6 +63,9 @@ end
     * 0 and 1 - none
     * 2 - updates info
     * 3 - active agents info
+* `V2V` : V2V hybrid model switch
+* `V2V_range` : range of V2V communication
+* `V2V_throughput` : throughput of V2V master to slaves communication
 """
 function simulation_ITS(OSMmap::MapData,
                         inAgents::Vector{Agent},
@@ -80,15 +75,14 @@ function simulation_ITS(OSMmap::MapData,
                         T::Float64 = 1.0,
                         k::Int64 = 3,
                         density_factor::Float64 = 5.0,
-                        debug_level::Int64 = 3)
+                        debug_level::Int64 = 3,
+                        V2V::Bool = false,
+                        V2V_range::Float64 = 0.0,
+                        V2V_throughput::Int64 = 1)
     Agents = deepcopy(inAgents) #Creating working copy of agents
     max_densities, max_speeds = traffic_constants(OSMmap, density_factor) #Traffic characteristic constants
     densities, speeds = init_traffic_variables(OSMmap, Agents) #Traffic characteristic variables
     update_weights!(speeds, densities, max_densities, max_speeds) #Initial speeds update
-    # route_tracking = Dict{Int64,Vector{Tuple}}()
-    # for (i,a) in enumerate(Agents)
-    #     route_tracking[i] = [(a.edge,0.0,0.0,0.0,0.0)]
-    # end
     #Initialize simulation variables
     simtime = 0.0
     steps = 0
@@ -110,7 +104,7 @@ function simulation_ITS(OSMmap::MapData,
             if debug_level > 1 update_nr = Int(simtime ÷ update_period + 1) end
             update_agents_position!(Agents, next_update, speeds) #Update position of all agents
             #Send update to agents in range if throughput limit not reached
-            updates, no_update, updt_util, updt_avblty = send_weights_update(Agents, OSMmap, RSUs, range)
+            updates, no_update, updt_util, updt_avblty = send_weights_update(Agents, OSMmap, RSUs, range, V2V, V2V_range, V2V_throughput)
             if debug_level > 1
                 smart_active = sum([1 for a in Agents if a.active && a.smart])
                 sum_updt = sum(updates)
@@ -174,6 +168,9 @@ end
     * 1 - iteration summaries
     * 2 - updates info
     * 3 - active agents info
+* `V2V` : V2V hybrid model switch
+* `V2V_range` : range of V2V communication
+* `V2V_throughput` : throughput of V2V master to slaves communication
 """
 function iterative_simulation_ITS(OSMmap::MapData,
                         inAgents::Vector{Agent},
@@ -184,12 +181,15 @@ function iterative_simulation_ITS(OSMmap::MapData,
                         T::Float64 = 1.0,
                         k::Int64 = 3,
                         density_factor::Float64 = 5.0,
-                        debug_level::Int64 = 1)
+                        debug_level::Int64 = 1,
+                        V2V::Bool = false,
+                        V2V_range::Float64 = 0.0,
+                        V2V_throughput::Int64 = 1)
     #Initialize working variables
     iteration = 1
     IterationResults = DataFrame(MinAvailability = Float64[], RSUs = Int[], Avail_per_RSU = Float64[])
     #Find initial RSUs locations
-    RSUs = calculate_RSU_location(OSMmap, inAgents, range, throughput)
+    RSUs = calculate_RSU_location(OSMmap, inAgents, range, throughput, V2V_throughput)
     ITSOutput = Tuple{}()
     availability_failed = utilization_failed = true
     while availability_failed || utilization_failed
@@ -199,7 +199,7 @@ function iterative_simulation_ITS(OSMmap::MapData,
             println("#################################")
         end
         #Run ITS simulation
-        ITSOutput = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug_level)
+        ITSOutput = simulation_ITS(OSMmap, inAgents, range, RSUs, update_period, T, k, density_factor, debug_level, V2V, V2V_range, V2V_throughput)
         service_avblty = round.(ITSOutput.ServiceAvailability, digits=3)
         min_availability = minimum(service_avblty)
         RSU_Count = sum(getfield.(RSUs, :count))
@@ -207,7 +207,7 @@ function iterative_simulation_ITS(OSMmap::MapData,
         #Check optimization criteria
         utilization_failed = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, throughput)
         availability_failed = min_availability < threshold
-        availability_failed && adjust_RSU_availability!(OSMmap, RSUs, ITSOutput.FailedUpdates, range, throughput)
+        availability_failed && adjust_RSU_availability!(OSMmap, RSUs, ITSOutput.FailedUpdates, range, throughput, V2V_throughput)
         if debug_level > 0
             println("Service availability in updates:")
             println(round.(ITSOutput.ServiceAvailability, digits=3))

@@ -11,6 +11,8 @@ AgentsSet, AgentsTime, AgentsDists = generate_agents(test_map,10,Rect1,Rect2, 0.
 
 rangeRSU = 300.0
 throughput = 10
+V2Vrange = 100.0
+V2Vthput = 5
 
 #generate_agents.jl
 @testset "agents" begin
@@ -35,9 +37,12 @@ constantNode = AgentsSet[1].route[1]
 k_shortest_path_rerouting!(test_map, AgentsSet[1], OpenStreetMapX.get_velocities(test_map), 3, 1.0)
 @test AgentsSet[1].route[1] == constantNode
 
-RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput)
+RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput, V2Vthput)
 
-updateResults = send_weights_update(AgentsSet, test_map, RSUs, rangeRSU)
+updateResults = send_weights_update(AgentsSet, test_map, RSUs, rangeRSU, false, V2Vrange, V2Vthput)
+@test typeof(updateResults) == Tuple{BitArray{1},Array{ENU,1},Dict{Int64,Float64},Float64}
+
+updateResults = send_weights_update(AgentsSet, test_map, RSUs, rangeRSU, true, V2Vrange, V2Vthput)
 @test typeof(updateResults) == Tuple{BitArray{1},Array{ENU,1},Dict{Int64,Float64},Float64}
 end
 
@@ -49,8 +54,8 @@ output = base_simulation(test_map, newAgents, debug_level = 0)
 @test length(output) == 3
 @test typeof(output) == NamedTuple{(:Steps, :Simtime, :TravelTimes),Tuple{Int64,Float64,Array{Float64,1}}}
 
-RSUs = calculate_RSU_location(test_map, newAgents, rangeRSU, throughput)
-ITSOutput = simulation_ITS(test_map, newAgents, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
+RSUs = calculate_RSU_location(test_map, newAgents, rangeRSU, throughput, V2Vthput)
+ITSOutput = simulation_ITS(test_map, newAgents, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0, false, V2Vrange, V2Vthput)
 
 @test length(ITSOutput) == 6
 @test typeof(ITSOutput) == NamedTuple{(:Steps, :Simtime, :TravelTimes, :ServiceAvailability, :RSUsUtilization, :FailedUpdates),Tuple{Int64,Float64,Array{Float64,1},Array{Float64,1},Array{Dict{Int64,Float64},1},Array{Array{ENU,1},1}}}
@@ -108,13 +113,13 @@ end
 @testset "optimization" begin
 
 
-RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput)
+RSUs = calculate_RSU_location(test_map, AgentsSet, rangeRSU, throughput, V2Vthput)
 @test rand(RSUs).node in keys(test_map.v)
 @test typeof(RSUs[1]) == RSU
 
-ITSOutput = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0)
+ITSOutput = simulation_ITS(test_map, AgentsSet, rangeRSU, RSUs, 50, 1.0, 3, 5.0, 0, false, V2Vrange, V2Vthput)
 oldRSUs = deepcopy(RSUs)
-adjust_RSU_availability!(test_map, RSUs, ITSOutput.FailedUpdates, rangeRSU, throughput)
+adjust_RSU_availability!(test_map, RSUs, ITSOutput.FailedUpdates, rangeRSU, throughput, V2Vthput)
 @test oldRSUs != RSUs
 
 failed_utilization = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, throughput)
