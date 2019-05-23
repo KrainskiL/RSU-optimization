@@ -144,11 +144,13 @@ end
 * `OSMmap` : MapData type object with road network data
 * `inAgent` : agent which current coordinates are requested
 """
-function get_agent_coordinates(OSMmap::MapData, inAgent::Agent)
-    if inAgent.pos == 0.0 return OSMmap.nodes[inAgent.route[1]] end
+function get_agent_coordinates(OSMmap::MapData,
+                                inAgent::Agent,
+                                time_to_junction::Float64,
+                                speeds::AbstractMatrix)
     pA = OSMmap.nodes[inAgent.route[1]]
     pB = OSMmap.nodes[inAgent.route[2]]
-    rel_pos = inAgent.pos/OSMmap.w[inAgent.edge[1],inAgent.edge[2]]
+    rel_pos = 1 - (time_to_junction*speeds[inAgent.edge[1],inAgent.edge[2]])/OSMmap.w[inAgent.edge[1],inAgent.edge[2]]
     Agent_coor = ENU(pA.east+(pB.east-pA.east)*rel_pos,
                     pA.north+(pB.north-pA.north)*rel_pos,
                     pA.up+(pB.up-pA.up)*rel_pos)

@@ -34,12 +34,40 @@ end
 * `V_min` : minimal speed on road
 """
 function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64},
-                        new_densities::Dict,
+                        edges::Vector{Vector{Int64}},
+                        dens::Dict{Vector{Int64},Int64},
                         max_densities::SparseMatrixCSC{Float64,Int64},
                         V_max::SparseMatrixCSC{Float64,Int64},
                         V_min::Float64 = 1.0)
-    for (k,d) in new_densities
-        speed_matrix[k[1],k[2]]  = (V_max[k[1],k[2]] - V_min)* max((1 - d/max_densities[k[1],k[2]]), 0.0) + V_min
+    speed_factors = Vector{Float64}()
+    for edge in edges
+        v1, v2 = edge
+        old_speed = speed_matrix[v1,v2]
+        speed_matrix[v1,v2]  = (V_max[v1,v2] - V_min)* max((1 - dens[edge]/max_densities[v1,v2]), 0.0) + V_min
+        push!(speed_factors, old_speed/speed_matrix[v1,v2])
+    end
+    return speed_factors
+end
+
+function update_weights!(speed_matrix::SparseMatrixCSC{Float64,Int64},
+                        dens::Dict{Vector{Int64},Int64},
+                        max_densities::SparseMatrixCSC{Float64,Int64},
+                        V_max::SparseMatrixCSC{Float64,Int64},
+                        V_min::Float64 = 1.0)
+    for (k,v) in dens
+        v1, v2 = k
+        speed_matrix[v1,v2]  = (V_max[v1,v2] - V_min)* max((1 - dens[k]/max_densities[v1,v2]), 0.0) + V_min
+    end
+end
+
+function event_time_correction!(inAgents::Vector{Agent},
+    edges::Vector{Vector{Int64}},
+    factors::Vector{Float64},
+    events::Vector{Float64})
+    for (i,e) in enumerate(edges)
+        for (j,a) in enumerate(inAgents)
+            if a.active && a.edge == e events[j] *= factors[i] end
+        end
     end
 end
 """
@@ -82,30 +110,26 @@ end
 * `speeds` : current speeds matrix
 * `lengths` : matrix with road lengths
 """
+function next_edge(Agent::Agent,
+                    speeds::AbstractMatrix,
+                    lengths::AbstractMatrix)
+    e = Agent.edge
+    event_time = lengths[e[1],e[2]]/speeds[e[1],e[2]]
+    return event_time
+end
+
 function next_edge(Agents::Vector{Agent},
                     speeds::AbstractMatrix,
                     lengths::AbstractMatrix)
-    events = Dict{Int, Float64}()
-    N = length(Agents)
-    for i = 1:N
-        if Agents[i].active
-            e = Agents[i].edge
-            pos = Agents[i].pos
-            events[i] = (lengths[e[1],e[2]] - pos)/speeds[e[1],e[2]]
-        else
-            events[i] = Inf
-        end
-    end
-    return findmin(events)
+    return [next_edge(a,speeds,lengths) for a in Agents]
 end
-
 """
 `update_event_agent!` update densities matrix, progress agents to next edge and deactivate agents
 
 **Input parameters**
 * `inAgent` : agent connected with occuring event
 * `curr_time` : current simulation time
-* `densities` : current traffic densitites matrix
+* `densities` : current traffic densitites dictionary
 * `vertices_map` : mapping from nodes to vertices
 """
 function update_event_agent!(inAgent::Agent,
@@ -116,13 +140,12 @@ function update_event_agent!(inAgent::Agent,
     p_edge = inAgent.edge
     densities[p_edge] -= 1
     #Update agent  position
-    inAgent.pos = 0.0
     if length(inAgent.route) == 2
         #Disable agent and set travelling time
         inAgent.active = false
         inAgent.travel_time = curr_time
         #Return dictionary with changed density
-        return Dict(p_edge => densities[p_edge])
+        return [p_edge]
     else
         #Update agent route and current edge
         inAgent.route = inAgent.route[2:end]
@@ -131,23 +154,6 @@ function update_event_agent!(inAgent::Agent,
         #Add density on new edge
         haskey(densities, c_edge) ? densities[c_edge] += 1 : densities[c_edge] = 1
         #Return dictionary with changed densities
-        return Dict(c_edge => densities[c_edge],
-                    p_edge => densities[p_edge])
-    end
-end
-
-"""
-`update_agents_position!` change agents position on edge according to given time passed
-
-**Input parameters**
-* `Agents` : set of agents created with generate_agents function
-* `time_passed` : time passed since last event
-* `speeds` : current speeds matrix
-"""
-function update_agents_position!(Agents::Vector{Agent},
-                                time_passed::Float64,
-                                speeds::AbstractMatrix)
-    for a in Agents
-        a.active && (a.pos += time_passed * speeds[a.edge[1], a.edge[2]])
+        return [p_edge, c_edge]
     end
 end

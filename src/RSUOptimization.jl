@@ -19,7 +19,7 @@ export calculate_RSU_location, adjust_RSU_availability!, adjust_RSU_utilization!
 #rerouting.jl
 export k_shortest_path_rerouting!, send_weights_update
 #simulations.jl
-export base_simulation, simulation_ITS, iterative_simulation_ITS
+export simulation_run, iterative_simulation_ITS
 #traffic_model.jl
 export get_max_densities, traffic_constants, init_traffic_variables, next_edge
 export update_weights!, update_event_agent!, update_agents_position!

@@ -6,11 +6,15 @@
 Nodes are randomly chosen from set of rectangles corresponding to areas on map.
 
 **Input parameters**
-* `OSMmap` : mapData type object with road network data
+* `OSMmap` : OpenStreetMapX mapData type object with road network data
 * `rects` : vector of Rect types interpreted as a set of rectangle areas
+* `NodesSet` : returning object switch
+    * `false` return random node from given area
+    * `true` return set of nodes in given area for further processing
 """
 function pick_random_node(OSMmap::OpenStreetMapX.MapData,
-                          rects::Vector{Rect})
+                          rects::Vector{Rect},
+                          NodesSet::Bool = false)
     nodes_in_rects = Vector{Int}()
     for rect in rects
         p1 = ENU(LLA(rect.p1[1], rect.p1[2]), OSMmap.bounds)
@@ -24,8 +28,9 @@ function pick_random_node(OSMmap::OpenStreetMapX.MapData,
             end
         end
     end
-    chosen_node = rand(unique!(nodes_in_rects))
-    return chosen_node
+    unique_nodes = unique!(nodes_in_rects)
+    NodesSet && return unique_nodes
+    return rand(unique_nodes)
 end
 
 """
@@ -33,7 +38,7 @@ end
 for initial routes travelled with maximal speed
 
 **Input parameters**
-* `OSMmap` : MapData type object with road network data
+* `OSMmap` : OpenStreetMapX MapData type object with road network data
 * `N` : number of agents to be generated
 * `StartArea` : vector of points corresponding to area from which agents randomly pick starting point
 * `EndArea` : vector of points corresponding to area from which agents randomly pick ending point
@@ -51,25 +56,26 @@ function generate_agents(OSMmap::OpenStreetMapX.MapData,
     #Indicate smart agents
     N_int= Int(ceil(N*α))
     smart_ind = [trues(N_int); falses(N-N_int)]
+    #Obtaining nodes set for given starting and ending areas
+    start_set = pick_random_node(OSMmap, StartArea, true)
+    end_set = pick_random_node(OSMmap, EndArea, true)
     #Generating N agents
     for i in 1:N
         dist = Inf
         start_node = end_node = counter = time =  0
         init_route = Array{Int64,1}()
         while dist == Inf
-            start_node = pick_random_node(OSMmap, StartArea)
-            end_node = pick_random_node(OSMmap, EndArea)
-            init_route, dist, time = fastest_route(OSMmap, start_node, end_node)
+            start_node = rand(start_set)
+            end_node = rand(end_set)
+            init_route, dist, time = OpenStreetMapX.fastest_route(OSMmap, start_node, end_node)
             counter +=1
-            if counter == 100
-                error("Route from starting to ending point can't be calculated.")
-            end
+            counter == 100 && error("Route from starting to ending point can't be calculated.")
         end
         push!(times, time)
         push!(dists, dist)
         #First edge in vertices notation
         firstEdge = [OSMmap.v[init_route[1]], OSMmap.v[init_route[2]]]
-        NewAgent = Agent(smart_ind[i], start_node, end_node, init_route, 0.0, firstEdge, 0.0, true)
+        NewAgent = Agent(smart_ind[i], start_node, end_node, init_route, 0.0, firstEdge, true)
         push!(AgentsArr, NewAgent)
     end
     return AgentsArr, times, dists

@@ -40,6 +40,8 @@ end
 **Input parameters**
 * `Agents` : set of agents created with generate_agents function
 * `OSMmap` : MapData type object with road network data
+* `speeds` : current speeds matrix
+* `events` : array of agents event time
 * `RSUs` : vector with RSUs objects
 * `range` : range of RSUs transfer
 * `V2V` : V2V hybrid model switch
@@ -48,9 +50,11 @@ end
 """
 function send_weights_update(Agents::Vector{Agent},
                             OSMmap::MapData,
+                            speeds::AbstractMatrix,
+                            events::Vector{Float64},
                             RSUs::Vector{RSU},
                             range::Float64,
-                            V2V::Bool,
+                            V2V::String,
                             V2V_range::Float64,
                             V2V_throughput::Int64)
     tmpRSUs = deepcopy(RSUs) #Creating working copy of RSUs
@@ -62,13 +66,13 @@ function send_weights_update(Agents::Vector{Agent},
     agents_coor = Dict{Int64,ENU}()
     for (i,a) in enumerate(Agents)
         if a.active && a.smart
-            agents_coor[i] = get_agent_coordinates(OSMmap, a)
+            agents_coor[i] = get_agent_coordinates(OSMmap, a, events[i], speeds)
         end
     end
     smart_active = length(agents_coor)
     #If agent is in range of RSU with availabe transfer, update is received
     if !isempty(agents_coor)
-        if V2V
+        if V2V == "v2v"
             V2V_hybrid_transfer!(tmpRSUs, agents_coor, range, update_received, V2V_range, V2V_throughput)
         else
             V2I_transfer!(tmpRSUs, agents_coor, range, update_received)
@@ -82,7 +86,6 @@ function send_weights_update(Agents::Vector{Agent},
     updt_RSUs_utilization = Dict([RSUs[r].node => (RSUs[r].total_thput - tmpRSUs[r].total_thput)/RSUs[r].total_thput for r = 1:length(RSUs)])
     return update_received, no_update, updt_RSUs_utilization, updt_service_avblty
 end
-
 
 function V2I_transfer!(RSUs::Vector{RSU},
                        agents_position::Dict{Int64,ENU},

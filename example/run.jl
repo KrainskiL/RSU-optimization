@@ -5,10 +5,10 @@ using CSV
 using DataFrames
 
 #Creating MapData object
-mapfile = "reno_east3.osm"
+mapfile = "reno_east3.osm";
 datapath = "C:/RSUOptimization.jl/example";
-RoadSet = 5
-map_data = OpenStreetMapX.get_map_data(datapath, mapfile,use_cache=false; road_levels = Set(1:RoadSet));
+RoadSet = 5;
+map_data = OpenStreetMapX.get_map_data(datapath, mapfile, use_cache = false; road_levels = Set(1:RoadSet));
 
 #Defining starting and ending area
 Start = [Rect((39.50,-119.70),(39.55,-119.74))]
@@ -18,12 +18,12 @@ End = [Rect((39.50,-119.80),(39.55,-119.76))]
 α = 0.6
 N = 1000
 density_factor = 5.0
-range = 1000.0
-throughput = 60
+RSU_range = 1000.0
+throughput = 200
 updt_period = 200
 T = 0.1
 k = 3
-V2V = true
+mode = "V2I"
 V2V_range = 200.0
 V2V_throughput = 9
 
@@ -42,7 +42,7 @@ ResultFrame = DataFrame(Map = String[],
               update_period = Int64[],
               T = Float64[],
               k = Int64[],
-              V2V = Bool[],
+              mode = String[],
               V2V_range = Float64[],
               V2V_throughput = Int64[],
               TotalTimeReduction = Float64[],
@@ -59,20 +59,18 @@ for element in Ns
       #Generating agents
       Agents = generate_agents(map_data, N, Start, End, element)[1]
       #Running base simulation - no V2I system
-      BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
+      BaseOutput = simulation_run("base", map_data, Agents)
       #ITS model with iterative RSU optimization
-      ITSOutput, RSUs = iterative_simulation_ITS(map_data,
+      ITSOutput, RSUs = iterative_simulation_ITS(mode,
+                                                map_data,
                                                 Agents,
-                                                range,
+                                                RSU_range,
                                                 throughput,
                                                 updt_period,
                                                 T = T,
                                                 debug_level = 1,
-                                                V2V = V2V,
                                                 V2V_range = V2V_range,
                                                 V2V_throughput = V2V_throughput)
-      # RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
-      # ITSOutput = simulation_ITS(map_data,Agents,range,RSUs,updt_period,T,k,density_factor,1)
       step_statistics = gather_statistics(getfield.(Agents,:smart),
                                           BaseOutput.TravelTimes,
                                           ITSOutput.TravelTimes,
@@ -83,8 +81,8 @@ for element in Ns
       push!(ResultFrame, [mapfile, RoadSet,
                           string((Start[1].p1,Start[1].p2)), string((End[1].p1,End[1].p2)),
                           element, N, density_factor,
-                          range, throughput, updt_period, T, k,
-                          V2V, V2V_range, V2V_throughput,
+                          RSU_range, throughput, updt_period, T, k,
+                          mode, V2V_range, V2V_throughput,
                           step_statistics.overall_time,
                           step_statistics.smart_time,
                           step_statistics.other_time,
@@ -94,3 +92,4 @@ for element in Ns
       end
 end
 CSV.write("RenoV2V.csv", ResultFrame)
+println(ResultFrame)
