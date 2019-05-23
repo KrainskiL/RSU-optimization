@@ -48,6 +48,7 @@ end
 * `failed_coor` : vector of vectors with agents coordinates missing an update
 * `range` : range of RSUs
 * `throughput` : number of agents RSU can serve at once
+* `V2V_throughput` : throughput of V2V master to slaves communication
 """
 function adjust_RSU_availability!(OSMmap::MapData,
                                 RSUs::Vector{RSU},
@@ -55,7 +56,7 @@ function adjust_RSU_availability!(OSMmap::MapData,
                                 range::Float64,
                                 throughput::Int64,
                                 V2V_throughput::Int64)
-    checkRSUs = deepcopy(RSUs)
+    RSU_count = sum(getfield.(RSUs,:count))
     RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
     failed_throughput = Vector{Vector{ENU}}()
@@ -110,7 +111,7 @@ function adjust_RSU_availability!(OSMmap::MapData,
         end
     end
     #Check if RSUs parameters were changed
-    if checkRSUs == RSUs error("Availability criterion can't be met. Stopping simulation.") end
+    if RSU_count == sum(getfield.(RSUs,:count)) error("Availability criterion can't be met. Stopping simulation.") end
 end
 
 """

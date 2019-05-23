@@ -1,5 +1,6 @@
 using OpenStreetMapX
 using RSUOptimization
+using RSUOptimizationVis
 using CSV
 using DataFrames
 
@@ -14,17 +15,17 @@ Start = [Rect((39.50,-119.70),(39.55,-119.74))]
 End = [Rect((39.50,-119.80),(39.55,-119.76))]
 
 #Input parameters
-α = 0.9
+α = 0.6
 N = 1000
 density_factor = 5.0
-range = 500.0
-throughput = 100
+range = 1000.0
+throughput = 60
 updt_period = 200
 T = 0.1
-k = 4
-V2V = false
-V2V_range = 0.0
-V2V_throughput = 1
+k = 3
+V2V = true
+V2V_range = 200.0
+V2V_throughput = 9
 
 """
 Parameters analysis
@@ -51,8 +52,8 @@ ResultFrame = DataFrame(Map = String[],
               MeanRSUUtilization = Float64[],
               RSUs = Int[])
 
-αs = 0.7:0.1:1.0
-for element in αs
+Ns = 0.1:0.1:1.0
+for element in Ns
       for i in 1:5
       println("$element : $i")
       #Generating agents
@@ -60,7 +61,16 @@ for element in αs
       #Running base simulation - no V2I system
       BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
       #ITS model with iterative RSU optimization
-      ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, T = T, debug_level = 0)
+      ITSOutput, RSUs = iterative_simulation_ITS(map_data,
+                                                Agents,
+                                                range,
+                                                throughput,
+                                                updt_period,
+                                                T = T,
+                                                debug_level = 1,
+                                                V2V = V2V,
+                                                V2V_range = V2V_range,
+                                                V2V_throughput = V2V_throughput)
       # RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
       # ITSOutput = simulation_ITS(map_data,Agents,range,RSUs,updt_period,T,k,density_factor,1)
       step_statistics = gather_statistics(getfield.(Agents,:smart),
@@ -83,4 +93,4 @@ for element in αs
                           step_statistics.RSU_count])
       end
 end
-CSV.write("reno_east3_Full_alfa_part2.csv", ResultFrame)
+CSV.write("RenoV2V.csv", ResultFrame)
