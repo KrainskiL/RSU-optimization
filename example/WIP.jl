@@ -20,46 +20,47 @@ End = [Rect((52.2482,21.0068),(52.235,21.03))]
 # Start = [Rect((52.2188,21.0068),(52.2482,21.02))]
 # End = [Rect((52.2188,21.06),(52.2482,21.0888))]
 
-α = 0.9
+α = 0.6
 N = 1000
 density_factor = 5.0
-range = 500.0
-throughput = 100
+RSU_range = 400.0
+throughput = 50
 updt_period = 200
 T = 0.1
 k = 3
-V2V = true
-V2V_range = 200.0
-V2V_throughput = 5
+mode = "V2V"
+V2V_range = 1000.0
+V2V_throughput = 9
+
 #Generating agents
 Agents = generate_agents(map_data, N, Start, End, α)[1]
-#Running base simulation - no V2I system
-@time BaseOutput = base_simulation(map_data, Agents)
-#ITS model with iterative RSU optimization
-@time ITSOutput, RSUs = iterative_simulation_ITS(map_data,
-                        Agents,
-                        range,
-                        throughput,
-                        updt_period,
-                        debug_level=2,
-                        V2V=V2V,
-                        V2V_range=V2V_range,
-                        V2V_throughput=V2V_throughput)
 
-RSUs = calculate_RSU_location(map_data, Agents, range, throughput, V2V_throughput)
+#ITS model with iterative RSU optimization
+ITSOutput, RSUs, OptimCrit, runtime = iterative_simulation_ITS(mode,
+                                          map_data,
+                                          Agents,
+                                          RSU_range,
+                                          throughput,
+                                          updt_period,
+                                          T = T,
+                                          debug_level = 1,
+                                          V2V_range = V2V_range,
+                                          V2V_throughput = V2V_throughput)
+RSUs = calculate_RSU_location("v2v", map_data, Agents, RSU_range, throughput, V2V_throughput)
 sum(getfield.(RSUs,:count))
-@time ITSOutput = simulation_ITS(map_data,
+[r.count for r in RSUs if r.count>1]
+
+@time ITSOutput = simulation_run("V2V", map_data,
                                                 Agents,
-                                                range,
+                                                RSU_range,
                                                 RSUs,
                                                 updt_period,
                                                 T,
                                                 k,
                                                 density_factor,
-                                                2,
-                                                V2V,
                                                 V2V_range,
-                                                V2V_throughput)
+                                                V2V_throughput,
+                                                debug_level=2)
 
 include("C:/RSUOptimizationVis.jl/src/RSUOptimizationVis.jl")
 RSUOptimizationVis.visualize_bounds(map_data,Start,End,"TEST.html")

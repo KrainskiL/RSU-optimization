@@ -161,12 +161,14 @@ function iterative_simulation_ITS(mode::String,
                         V2V_throughput::Int64 = 1)
     #Initialize working variables
     iteration = 1
+    curr_time = time()
     IterationResults = DataFrame(MinAvailability = Float64[], RSUs = Int[], Avail_per_RSU = Float64[])
     #Find initial RSUs locations
-    RSUs = calculate_RSU_location(OSMmap, inAgents, range, throughput, V2V_throughput)
+    RSUs = calculate_RSU_location(mode, OSMmap, inAgents, range, throughput, V2V_throughput)
     ITSOutput = Tuple{}()
     availability_failed = utilization_failed = true
-    while availability_failed || utilization_failed
+    optim_fail = false
+    while !optim_fail && (availability_failed || utilization_failed)
         if debug_level > 0
             println("#################################")
             println("Iteration nr $iteration started")
@@ -182,16 +184,23 @@ function iterative_simulation_ITS(mode::String,
         #Check optimization criteria
         utilization_failed = adjust_RSU_utilization!(RSUs, ITSOutput.RSUsUtilization, throughput)
         availability_failed = min_availability < threshold
-        availability_failed && adjust_RSU_availability!(OSMmap, RSUs, ITSOutput.FailedUpdates, range, throughput, V2V_throughput)
+        if availability_failed
+            optim_fail = adjust_RSU_availability!(OSMmap, RSUs, ITSOutput.FailedUpdates, range, throughput, V2V_throughput)
+        end
         if debug_level > 0
             println("Service availability in updates:")
             println(round.(ITSOutput.ServiceAvailability, digits=3))
             println("Minimum service availability: $min_availability")
+            if optim_fail
+                @warn "Availability criterion can't be met. Returning current RSUs set."
+                continue
+            end
             availability_failed && println("Availability too low, RSUs recalculated")
             utilization_failed && println("Utilization too low, number of RSUs reduced")
         end
         iteration += 1
     end
     if debug_level > 0 println(IterationResults) end
-    return ITSOutput, RSUs
+    elapsed = time() - curr_time
+    return ITSOutput, RSUs, optim_fail, elapsed
 end

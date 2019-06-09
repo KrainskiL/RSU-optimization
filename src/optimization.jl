@@ -6,17 +6,20 @@
 `calculate_RSU_location` function returns dictionary with number of RSUs in given nodes.
 
 **Input parameters**
+* `mode` : communication model indicator
 * `OSMmap` : MapData type from OpenStreetMapX package
 * `range` : range of RSUs
 * `throughput` : number of agents RSU can serve at once
 * `div_coeff` : adjustment factor for calculating number of RSUs in node
 """
-function calculate_RSU_location(OSMmap::MapData,
+function calculate_RSU_location(mode::String,
+                                OSMmap::MapData,
                                 inAgents::Vector{Agent},
                                 range::Float64,
                                 throughput::Int64,
                                 V2V_throughput::Int64;
                                 div_coeff::Float64 = 0.1)
+    mode = uppercase(mode)
     RSUs = Vector{RSU}()
     #Count how many times each node was passed by smart agents in base simulation
     passed_nodes = StatsBase.countmap(collect(Iterators.flatten([a.route for a in inAgents if a.smart])))
@@ -29,7 +32,8 @@ function calculate_RSU_location(OSMmap::MapData,
         rng_nodes = filter(n-> haskey(passed_nodes, n), rng_nodes)
         sum_count = sum(map(n-> passed_nodes[n],rng_nodes))
         #Calculate number of RSUs in node
-        N = Int(ceil(sum_count/throughput * div_coeff))
+        if mode =="V2I" N = Int(ceil(sum_count/throughput * div_coeff)) end
+        if mode =="V2V" N = Int(ceil(sum_count/(throughput*V2V_throughput) * div_coeff)) end
         #Create new RSU entry and push it to RSUs list
         new_RSU = RSU(nodeID, OSMmap.nodes[nodeID], N, N * throughput)
         push!(RSUs, new_RSU)
@@ -43,6 +47,7 @@ end
 `adjust_RSU_availability!` function adjust RSUs location and number to meet service availability and utilization criteria
 
 **Input parameters**
+* `mode` : communication model indicator
 * `OSMmap` : MapData type from OpenStreetMapX package
 * `RSUs` : vector with RSUs used in simulation
 * `failed_coor` : vector of vectors with agents coordinates missing an update
@@ -50,12 +55,14 @@ end
 * `throughput` : number of agents RSU can serve at once
 * `V2V_throughput` : throughput of V2V master to slaves communication
 """
-function adjust_RSU_availability!(OSMmap::MapData,
+function adjust_RSU_availability!(mode::String,
+                                OSMmap::MapData,
                                 RSUs::Vector{RSU},
                                 failed_coor::Vector{Vector{ENU}},
                                 range::Float64,
                                 throughput::Int64,
                                 V2V_throughput::Int64)
+    mode = uppercase(mode)
     RSU_count = sum(getfield.(RSUs,:count))
     RSU_ENU = getfield.(RSUs, :ENU) #Extract RSUs coordinates
     #Split set of coordinates according to reason of failure
@@ -89,7 +96,8 @@ function adjust_RSU_availability!(OSMmap::MapData,
         nodeID = findmax(nodes_count)[2]
         #Put RSU in given node
         max_to_serve = maximum(count.(n-> n == nodeID, collect.(Iterators.flatten.(values.(failed_range_dicts)))))
-        N = ceil(max_to_serve/(throughput*V2V_throughput))
+        if mode =="V2I" N = ceil(max_to_serve/throughput) end
+        if mode =="V2V" N = ceil(max_to_serve/(throughput*V2V_throughput)) end
         new_RSU = RSU(nodeID, OSMmap.nodes[nodeID], N, N * throughput)
         push!(RSUs, new_RSU)
         #Delete all points in new RSU range
@@ -105,13 +113,15 @@ function adjust_RSU_availability!(OSMmap::MapData,
     for rsu in unique(collect(Iterators.flatten(keys.(failed_thput_vecs))))
         if typeof(rsu) == RSU
             max_to_serve = maximum(count.(n-> n == rsu, failed_thput_vecs))
-            N = ceil(max_to_serve/(throughput*V2V_throughput))
+            if mode =="V2I" N = ceil(max_to_serve/throughput) end
+            if mode =="V2V" N = ceil(max_to_serve/(throughput*V2V_throughput)) end
             rsu.count += N
             rsu.total_thput += N * throughput
         end
     end
     #Check if RSUs parameters were changed
-    if RSU_count == sum(getfield.(RSUs,:count)) error("Availability criterion can't be met. Stopping simulation.") end
+    if RSU_count == sum(getfield.(RSUs,:count)) return true end
+    return false
 end
 
 """

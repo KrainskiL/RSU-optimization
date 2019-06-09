@@ -15,17 +15,17 @@ Start = [Rect((39.50,-119.70),(39.55,-119.74))]
 End = [Rect((39.50,-119.80),(39.55,-119.76))]
 
 #Input parameters
-α = 0.6
-N = 1000
+α = 0.5
+N = 800
 density_factor = 5.0
-RSU_range = 1000.0
-throughput = 200
+RSU_range = 500.0
+throughput = 50
 updt_period = 200
 T = 0.1
 k = 3
 mode = "V2I"
 V2V_range = 200.0
-V2V_throughput = 9
+V2V_throughput = 5
 
 """
 Parameters analysis
@@ -50,10 +50,12 @@ ResultFrame = DataFrame(Map = String[],
               NotSmartTimeReduction = Float64[],
               MinAvailability = Float64[],
               MeanRSUUtilization = Float64[],
-              RSUs = Int[])
+              RSUs = Int[],
+              OptimizationFailed = Bool[],
+              Runtime = Float64[])
 
-Ns = 0.1:0.1:1.0
-for element in Ns
+ParameterRange = 0.1:0.1:1.0
+for element in ParameterRange
       for i in 1:5
       println("$element : $i")
       #Generating agents
@@ -61,13 +63,14 @@ for element in Ns
       #Running base simulation - no V2I system
       BaseOutput = simulation_run("base", map_data, Agents)
       #ITS model with iterative RSU optimization
-      ITSOutput, RSUs = iterative_simulation_ITS(mode,
+      ITSOutput, RSUs, OptimFail, runtime = iterative_simulation_ITS(mode,
                                                 map_data,
                                                 Agents,
                                                 RSU_range,
                                                 throughput,
                                                 updt_period,
                                                 T = T,
+                                                k = k,
                                                 debug_level = 1,
                                                 V2V_range = V2V_range,
                                                 V2V_throughput = V2V_throughput)
@@ -88,8 +91,9 @@ for element in Ns
                           step_statistics.other_time,
                           step_statistics.service_availability,
                           step_statistics.RSUs_utilization,
-                          step_statistics.RSU_count])
+                          step_statistics.RSU_count,
+                          OptimFail,
+                          runtime])
       end
 end
-CSV.write("RenoV2V.csv", ResultFrame)
-println(ResultFrame)
+CSV.write("RenoV2I.csv", ResultFrame)
