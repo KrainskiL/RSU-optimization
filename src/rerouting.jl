@@ -40,6 +40,8 @@ end
 **Input parameters**
 * `Agents` : set of agents created with generate_agents function
 * `OSMmap` : MapData type object with road network data
+* `speeds` : current speeds matrix
+* `events` : array of agents event time
 * `RSUs` : vector with RSUs objects
 * `range` : range of RSUs transfer
 * `V2V` : V2V hybrid model switch
@@ -48,11 +50,14 @@ end
 """
 function send_weights_update(Agents::Vector{Agent},
                             OSMmap::MapData,
+                            speeds::AbstractMatrix,
+                            events::Vector{Float64},
                             RSUs::Vector{RSU},
                             range::Float64,
-                            V2V::Bool,
+                            mode::String,
                             V2V_range::Float64,
                             V2V_throughput::Int64)
+    mode = uppercase(mode)
     tmpRSUs = deepcopy(RSUs) #Creating working copy of RSUs
     #Vector marking if agent receive update in given iteration
     update_received = falses(length(Agents))
@@ -62,13 +67,13 @@ function send_weights_update(Agents::Vector{Agent},
     agents_coor = Dict{Int64,ENU}()
     for (i,a) in enumerate(Agents)
         if a.active && a.smart
-            agents_coor[i] = get_agent_coordinates(OSMmap, a)
+            agents_coor[i] = get_agent_coordinates(OSMmap, a, events[i], speeds)
         end
     end
     smart_active = length(agents_coor)
     #If agent is in range of RSU with availabe transfer, update is received
     if !isempty(agents_coor)
-        if V2V
+        if mode == "V2V"
             V2V_hybrid_transfer!(tmpRSUs, agents_coor, range, update_received, V2V_range, V2V_throughput)
         else
             V2I_transfer!(tmpRSUs, agents_coor, range, update_received)
@@ -82,7 +87,6 @@ function send_weights_update(Agents::Vector{Agent},
     updt_RSUs_utilization = Dict([RSUs[r].node => (RSUs[r].total_thput - tmpRSUs[r].total_thput)/RSUs[r].total_thput for r = 1:length(RSUs)])
     return update_received, no_update, updt_RSUs_utilization, updt_service_avblty
 end
-
 
 function V2I_transfer!(RSUs::Vector{RSU},
                        agents_position::Dict{Int64,ENU},
@@ -107,6 +111,7 @@ function V2V_hybrid_transfer!(RSUs::Vector{RSU},
                        update_received::BitArray{1},
                        V2V_range::Float64,
                        V2V_throughput::Int64)
+    masters = 0
     for rsu in RSUs
         #Find all agents in range
         in_range = Dict{Int64,Float64}()
@@ -122,9 +127,11 @@ function V2V_hybrid_transfer!(RSUs::Vector{RSU},
             #Serve agents furthest from RSU first
             ID = findmax(in_range)[2]
             update_received[ID] = true  #Master receive update
+            masters += 1
             rsu.total_thput -= 1 #Decrease throughput
             #Calculate other agents distances to master
-            dist_to_master = [(k,OpenStreetMapX.distance(agents_position[ID], v)) for (k,v) in agents_position if k!=ID]
+            master_position = agents_position[ID]
+            dist_to_master = [(k,OpenStreetMapX.distance(master_position, v)) for (k,v) in agents_position if k!=ID]
             #Filter agents in V2V range
             filter!(t-> t[2] <= V2V_range, dist_to_master)
             if !isempty(dist_to_master)
@@ -133,9 +140,10 @@ function V2V_hybrid_transfer!(RSUs::Vector{RSU},
                 to = min(length(dist_to_master), V2V_throughput)
                 #Serve up to V2V_throughput agents
                 for e in dist_to_master[1:to]
-                    update_received[e[1]] = true
-                    delete!(agents_position, e)
-                    if haskey(in_range, e) delete!(in_range,e) end
+                    AgentID = e[1]
+                    update_received[AgentID] = true
+                    delete!(agents_position, AgentID)
+                    if haskey(in_range, AgentID) delete!(in_range, AgentID) end
                 end
             end
             #Delete master

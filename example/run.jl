@@ -1,30 +1,31 @@
 using OpenStreetMapX
 using RSUOptimization
+using RSUOptimizationVis
 using CSV
 using DataFrames
 
 #Creating MapData object
-mapfile = "reno_east3.osm"
+mapfile = "reno_east3.osm";
 datapath = "C:/RSUOptimization.jl/example";
-RoadSet = 5
-map_data = OpenStreetMapX.get_map_data(datapath, mapfile,use_cache=false; road_levels = Set(1:RoadSet));
+RoadSet = 5;
+map_data = OpenStreetMapX.get_map_data(datapath, mapfile, use_cache = false; road_levels = Set(1:RoadSet));
 
 #Defining starting and ending area
 Start = [Rect((39.50,-119.70),(39.55,-119.74))]
 End = [Rect((39.50,-119.80),(39.55,-119.76))]
 
 #Input parameters
-α = 0.9
-N = 1000
+α = 0.5
+N = 800
 density_factor = 5.0
-range = 500.0
-throughput = 100
+RSU_range = 500.0
+throughput = 50
 updt_period = 200
 T = 0.1
-k = 4
-V2V = false
-V2V_range = 0.0
-V2V_throughput = 1
+k = 3
+mode = "V2I"
+V2V_range = 200.0
+V2V_throughput = 5
 
 """
 Parameters analysis
@@ -41,7 +42,7 @@ ResultFrame = DataFrame(Map = String[],
               update_period = Int64[],
               T = Float64[],
               k = Int64[],
-              V2V = Bool[],
+              mode = String[],
               V2V_range = Float64[],
               V2V_throughput = Int64[],
               TotalTimeReduction = Float64[],
@@ -49,20 +50,30 @@ ResultFrame = DataFrame(Map = String[],
               NotSmartTimeReduction = Float64[],
               MinAvailability = Float64[],
               MeanRSUUtilization = Float64[],
-              RSUs = Int[])
+              RSUs = Int[],
+              OptimizationFailed = Bool[],
+              Runtime = Float64[])
 
-αs = 0.7:0.1:1.0
-for element in αs
+ParameterRange = 0.1:0.1:1.0
+for element in ParameterRange
       for i in 1:5
       println("$element : $i")
       #Generating agents
       Agents = generate_agents(map_data, N, Start, End, element)[1]
       #Running base simulation - no V2I system
-      BaseOutput = base_simulation(map_data, Agents, debug_level = 0)
+      BaseOutput = simulation_run("base", map_data, Agents)
       #ITS model with iterative RSU optimization
-      ITSOutput, RSUs = iterative_simulation_ITS(map_data, Agents, range, throughput, updt_period, T = T, debug_level = 0)
-      # RSUs = calculate_RSU_location(map_data, Agents, range, throughput)
-      # ITSOutput = simulation_ITS(map_data,Agents,range,RSUs,updt_period,T,k,density_factor,1)
+      ITSOutput, RSUs, OptimFail, runtime = iterative_simulation_ITS(mode,
+                                                map_data,
+                                                Agents,
+                                                RSU_range,
+                                                throughput,
+                                                updt_period,
+                                                T = T,
+                                                k = k,
+                                                debug_level = 1,
+                                                V2V_range = V2V_range,
+                                                V2V_throughput = V2V_throughput)
       step_statistics = gather_statistics(getfield.(Agents,:smart),
                                           BaseOutput.TravelTimes,
                                           ITSOutput.TravelTimes,
@@ -73,14 +84,16 @@ for element in αs
       push!(ResultFrame, [mapfile, RoadSet,
                           string((Start[1].p1,Start[1].p2)), string((End[1].p1,End[1].p2)),
                           element, N, density_factor,
-                          range, throughput, updt_period, T, k,
-                          V2V, V2V_range, V2V_throughput,
+                          RSU_range, throughput, updt_period, T, k,
+                          mode, V2V_range, V2V_throughput,
                           step_statistics.overall_time,
                           step_statistics.smart_time,
                           step_statistics.other_time,
                           step_statistics.service_availability,
                           step_statistics.RSUs_utilization,
-                          step_statistics.RSU_count])
+                          step_statistics.RSU_count,
+                          OptimFail,
+                          runtime])
       end
 end
-CSV.write("reno_east3_Full_alfa_part2.csv", ResultFrame)
+CSV.write("RenoV2I.csv", ResultFrame)
