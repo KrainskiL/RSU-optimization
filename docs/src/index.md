@@ -2,4 +2,4 @@
 
 Documentation for RSUOptimization.jl
 
-For details please go to the [Reference](https://pszufe.github.io/OpenStreetMapXDES.jl/latest/reference/) section.
+For details please go to the [Reference](https://krainskil.github.io/RSUOptimization.jl/latest/reference/) section.
